@@ -1,0 +1,13 @@
+[package]
+name = "mobiusdb-flight"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = { workspace = true }
+tokio = { workspace = true }
+tonic = { workspace = true }
+arrow = { workspace = true }
+arrow-flight = { workspace = true }
+futures = { workspace = true }
+prost = { workspace = true }
