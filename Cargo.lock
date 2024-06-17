@@ -986,6 +986,7 @@ dependencies = [
  "arrow-flight",
  "futures",
  "prost",
+ "serde",
  "tokio",
  "tonic",
 ]

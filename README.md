@@ -1,8 +1,9 @@
 
 
-### 想做的功能
+### 需要实现的功能
 - [ ] 以arrow为底座,arrow flight为主要通信方式(可以添加具体其他业务接口)
   - [ ] hankshand （*HandshakeRequest*）
+    - [x] (接口打通)
   - [ ] list_flights
   - [ ] get_flight_info
   - [ ] poll_flight_info
@@ -62,14 +63,16 @@
 
 - Path：路径
 - Cmd：命令
-  - 
 - Unknown：位置类型
 
 #### 3、Ticket
 
 #### 4、Action
 
+#### 5、Criteria
 
+- 用于 *list_flights( )* 方法，用于获取指定条件的flight集合
+- v1版本，只能用于表示table_name;
 
 
 

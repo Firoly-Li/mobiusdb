@@ -1,11 +1,21 @@
-use arrow::{array::RecordBatch, datatypes::Schema};
-use arrow_flight::{
-    flight_service_server::FlightServiceServer, Action, ActionType, BasicAuth, Criteria, Empty, FlightClient, FlightData, FlightDescriptor, FlightInfo, HandshakeRequest, HandshakeResponse, PollInfo, PutResult, Ticket
-};
-use mobiusdb_flight::{state::State, ApiServer};
-use prost::{bytes::{Bytes, BytesMut}, Message};
-use tonic::{metadata::MetadataMap, transport::{Channel, Server}, Status};
+use std::sync::Arc;
+
 use anyhow::Result;
+use arrow::{array::RecordBatch, datatypes::*, error::ArrowError, json::ReaderBuilder};
+use arrow_flight::{
+    flight_service_server::FlightServiceServer, utils::batches_to_flight_data, Action, ActionType,
+    BasicAuth, Criteria, Empty, FlightClient, FlightData, FlightDescriptor, FlightInfo,
+    HandshakeRequest, HandshakeResponse, PollInfo, PutResult, Ticket,
+};
+use futures::{StreamExt, TryStreamExt};
+use mobiusdb_flight::{list_flights::FlightsKey, state::State, ApiServer};
+use prost::{bytes::Bytes, Message};
+use serde::Serialize;
+use tonic::{
+    metadata::MetadataMap,
+    transport::{Channel, Server},
+    Status,
+};
 
 /// mutable state for the TestFlightServer, captures requests and provides responses
 #[derive(Debug, Default)]
@@ -60,7 +70,11 @@ impl StateTest {
     }
 }
 
-impl State for StateTest {}
+impl State for StateTest {
+    fn flight_list(&self, key: &FlightsKey) -> Vec<FlightInfo> {
+        Vec::new()
+    }
+}
 
 pub async fn flight_server() -> Result<()> {
     let test_flight_server = ApiServer::new(StateTest::new());
@@ -76,34 +90,109 @@ pub async fn flight_client() -> Result<FlightClient> {
     if let Ok(channel) = Channel::from_static(local_url).connect().await {
         let client = FlightClient::new(channel);
         Ok(client)
-    }else {
+    } else {
         Err(anyhow::Error::msg(""))
     }
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn handshake_test() {
+async fn handshake_should_be_work() {
     tokio::spawn(async move {
         let _ = flight_server().await;
     });
 
-    let auth = BasicAuth { 
-        username: String::from("username"), 
-        password: String::from("password")  
+    let auth = BasicAuth {
+        username: String::from("username"),
+        password: String::from("password"),
     };
 
     let mut buf = Vec::new();
 
-    auth.encode(&mut buf);
-    let request = HandshakeRequest{
-            protocol_version: 1,
-            payload: buf.into(),
-        };
+    let _ = auth.encode(&mut buf);
+    let request = HandshakeRequest {
+        protocol_version: 1,
+        payload: buf.into(),
+    };
     if let Ok(mut client) = flight_client().await {
         let mut buf1 = Vec::new();
         let _ = request.encode(&mut buf1);
         let resp = client.handshake(buf1).await;
         assert!(resp.is_ok());
     };
+}
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn list_flights_should_be_work() {
+    tokio::spawn(async move {
+        let _ = flight_server().await;
+    });
+
+    if let Ok(mut client) = flight_client().await {
+        let c = Criteria {
+            expression: Bytes::from("table1"),
+        };
+        let resp = client.list_flights(c.expression).await;
+        match resp {
+            Ok(resp) => {
+                let response: Vec<_> = resp.try_collect().await.expect("Error streaming data");
+                println!("flight_info = {:?}", response);
+            }
+            Err(_) => println!("error"),
+        }
+    };
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn do_put_should_be_work() {
+    // tokio::spawn(async move {
+    //     let _ = flight_server().await;
+    // });
+
+    if let Ok(mut client) = flight_client().await {
+        let batch = create_batch();
+        match batch {
+            Ok(b) => {
+                // 创建一个流，用于发送数据到服务端
+                let input_stream = futures::stream::iter(b).map(Ok);
+                let a = client.do_put(input_stream).await.unwrap();
+            }
+            Err(_) => todo!(),
+        }
+    };
+}
+
+#[derive(Serialize)]
+struct MyStruct {
+    int32: i32,
+    string: String,
+}
+pub fn create_batch() -> Result<Vec<FlightData>, ArrowError> {
+    let schema = Schema::new(vec![
+        Field::new("int32", DataType::Int32, false),
+        Field::new("string", DataType::Utf8, false),
+    ]);
+
+    let mut vecs = Vec::new();
+    for _ in 0..5 {
+        let rows = vec![
+            MyStruct {
+                int32: 5,
+                string: "bar".to_string(),
+            },
+            MyStruct {
+                int32: 8,
+                string: "foo".to_string(),
+            },
+        ];
+
+        let mut decoder = ReaderBuilder::new(Arc::new(schema.clone()))
+            .build_decoder()
+            .unwrap();
+        decoder.serialize(&rows).unwrap();
+
+        let batch: arrow::array::RecordBatch = decoder.flush().unwrap().unwrap();
+        vecs.push(batch);
+    }
+    println!("vecs = {:?}", vecs.len());
+    batches_to_flight_data(&schema, vecs)
 }

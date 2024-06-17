@@ -11,3 +11,4 @@ arrow = { workspace = true }
 arrow-flight = { workspace = true }
 futures = { workspace = true }
 prost = { workspace = true }
+serde = {workspace = true }

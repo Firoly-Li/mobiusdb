@@ -1,13 +1,16 @@
+pub mod do_put;
+pub mod list_flights;
 pub mod state;
 
-use std::io::stdout;
-
 use arrow_flight::{
-    flight_descriptor::DescriptorType, flight_service_server::FlightService, Action, ActionType,
-    BasicAuth, Criteria, Empty, FlightData, FlightDescriptor, FlightEndpoint, FlightInfo,
-    HandshakeRequest, HandshakeResponse, PollInfo, PutResult, SchemaResult, Ticket,
+    error::FlightError, flight_descriptor::DescriptorType, flight_service_server::FlightService,
+    utils::flight_data_to_batches, Action, ActionType, BasicAuth, Criteria, Empty, FlightData,
+    FlightDescriptor, FlightEndpoint, FlightInfo, HandshakeRequest, HandshakeResponse, PollInfo,
+    PutResult, SchemaResult, Ticket,
 };
-use futures::{stream::BoxStream, StreamExt};
+use do_put::write_batch;
+use futures::{stream::BoxStream, StreamExt, TryStreamExt};
+use list_flights::FlightsKey;
 use prost::{bytes::Bytes, Message};
 use state::State;
 use tonic::{Request, Response, Status, Streaming};
@@ -42,7 +45,7 @@ where
             handshake_request
         );
         let _version = handshake_request.protocol_version;
-        
+
         let p = handshake_request.payload;
         let auth = BasicAuth::decode(p);
         println!("BasicAuth{:?}", auth);
@@ -67,9 +70,15 @@ where
      */
     async fn list_flights(
         &self,
-        _request: Request<Criteria>,
+        request: Request<Criteria>,
     ) -> Result<Response<Self::ListFlightsStream>, Status> {
-        unimplemented!()
+        let req = request.into_inner();
+        let key: FlightsKey = req.into();
+        let flights = self.state.flight_list(&key);
+        let batchs: Vec<Result<FlightInfo, FlightError>> =
+            flights.iter().map(|x| Ok(x.clone())).collect();
+        let flights_stream = futures::stream::iter(batchs).map_err(Into::into);
+        Ok(Response::new(flights_stream.boxed()))
     }
     /**
      * 客户端请求特定数据集的详细信息，服务端返回 FlightInfo，
@@ -188,9 +197,24 @@ where
      */
     async fn do_put(
         &self,
-        _request: Request<Streaming<FlightData>>,
+        request: Request<Streaming<FlightData>>,
     ) -> Result<Response<Self::DoPutStream>, Status> {
-        unimplemented!()
+        println!("触发 do_put");
+        let stream: Vec<_> = request.into_inner().collect().await;
+        // 从第一个FlightData消息中尝试提取schema
+        let ss = stream
+            .into_iter()
+            .filter_map(|fd| fd.ok())
+            .collect::<Vec<FlightData>>();
+        println!("ss: {:?}", ss);
+
+        let ss1 = ss.clone();
+        let batches = flight_data_to_batches(&ss1).unwrap();
+        println!("batches: {:?}", batches);
+        // 这里需要把RecordBatch存储起来，以便于后续使用
+        let write_result = write_batch(batches).await;
+        let stream = futures::stream::iter(write_result).map_err(Into::into);
+        Ok(Response::new(stream.boxed()))
     }
 
     type DoExchangeStream = BoxStream<'static, Result<FlightData, Status>>;
