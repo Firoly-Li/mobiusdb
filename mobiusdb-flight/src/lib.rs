@@ -2,6 +2,8 @@ pub mod do_put;
 pub mod list_flights;
 pub mod state;
 
+use std::pin::Pin;
+
 use arrow_flight::{
     error::FlightError, flight_descriptor::DescriptorType, flight_service_server::FlightService,
     utils::flight_data_to_batches, Action, ActionType, BasicAuth, Criteria, Empty, FlightData,
@@ -9,7 +11,7 @@ use arrow_flight::{
     PutResult, SchemaResult, Ticket,
 };
 use do_put::write_batch;
-use futures::{stream::BoxStream, StreamExt, TryStreamExt};
+use futures::{stream::BoxStream, Stream, StreamExt, TryStreamExt};
 use list_flights::FlightsKey;
 use prost::{bytes::Bytes, Message};
 use state::State;
@@ -33,7 +35,8 @@ impl<S> FlightService for ApiServer<S>
 where
     S: State + Send + Sync + 'static,
 {
-    type HandshakeStream = BoxStream<'static, Result<HandshakeResponse, Status>>;
+    // type HandshakeStream = BoxStream<'static, Result<HandshakeResponse, Status>>;
+    type HandshakeStream = Pin<Box<dyn Stream<Item = Result<HandshakeResponse, Status>> + Send>>;
     async fn handshake(
         &self,
         request: Request<Streaming<HandshakeRequest>>,
@@ -63,7 +66,8 @@ where
             Err(_e) => Err(Status::ok("message")),
         }
     }
-    type ListFlightsStream = BoxStream<'static, Result<FlightInfo, Status>>;
+    // type ListFlightsStream = BoxStream<'static, Result<FlightInfo, Status>>;
+    type ListFlightsStream = Pin<Box<dyn Stream<Item = Result<FlightInfo, Status>> + Send>>;
     /**
      * 客户端可以向服务端发送 ListFlights 请求，服务端响应包含可用数据集或服务列表的 FlightInfo 对象。
      * 这些信息通常包括数据集的描述、Schema、分区信息等，帮助客户端了解可访问的数据资源。
@@ -162,8 +166,8 @@ where
         };
     }
 
-    type DoGetStream = BoxStream<'static, Result<FlightData, Status>>;
-
+    // type DoGetStream = BoxStream<'static, Result<FlightData, Status>>;
+    type DoGetStream = Pin<Box<dyn Stream<Item = Result<FlightData, Status>> + Send>>;
     /**
      * 客户端根据 FlightInfo 发送 DoGet 请求以获取数据。服务端以流的形式返回数据，
      * 每个数据包通常是 Arrow 格式的 RecordBatch。
@@ -187,8 +191,8 @@ where
         unimplemented!()
     }
 
-    type DoPutStream = BoxStream<'static, Result<PutResult, Status>>;
-
+    // type DoPutStream = BoxStream<'static, Result<PutResult, Status>>;
+    type DoPutStream = Pin<Box<dyn Stream<Item = Result<PutResult, Status>> + Send>>;
     /**
      * 客户端使用 DoPut 请求将数据上传至服务端。
      * 客户端以流的形式发送包含 Arrow RecordBatch 的数据包，服务端接收并存储这些数据。
@@ -217,8 +221,8 @@ where
         Ok(Response::new(stream.boxed()))
     }
 
-    type DoExchangeStream = BoxStream<'static, Result<FlightData, Status>>;
-
+    // type DoExchangeStream = BoxStream<'static, Result<FlightData, Status>>;
+    type DoExchangeStream = Pin<Box<dyn Stream<Item = Result<FlightData, Status>> + Send>>;
     /**
      * 支持客户端和服务端之间进行双向数据流交换。
      * 双方可以同时发送和接收 Arrow RecordBatch，
@@ -231,8 +235,8 @@ where
         unimplemented!()
     }
 
-    type DoActionStream = BoxStream<'static, Result<arrow_flight::Result, Status>>;
-
+    // type DoActionStream = BoxStream<'static, Result<arrow_flight::Result, Status>>;
+    type DoActionStream = Pin<Box<dyn Stream<Item = Result<arrow_flight::Result, Status>> + Send>>;
     /**
      * 用于扩展arrowFlight机制，可以自定义Action
      * 客户端可以发送一个包含特定操作请求的消息（如执行 SQL 查询、触发数据处理任务等）。
@@ -246,8 +250,8 @@ where
         unimplemented!()
     }
 
-    type ListActionsStream = BoxStream<'static, Result<ActionType, Status>>;
-
+    // type ListActionsStream = BoxStream<'static, Result<ActionType, Status>>;
+    type ListActionsStream = Pin<Box<dyn Stream<Item = Result<ActionType, Status>> + Send>>;
     async fn list_actions(
         &self,
         _request: Request<Empty>,
