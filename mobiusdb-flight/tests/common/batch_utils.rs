@@ -73,23 +73,14 @@ pub fn create_short_batch() -> RecordBatch {
                 "2".as_bytes(),
                 "3".as_bytes(),
             ])),
-            Arc::new(Int32Array::from(vec![
-                4, 5, 6,
-            ])),
-            Arc::new(Int32Array::from(vec![
-                7, 8, 9,
-            ])),
-            Arc::new(UInt64Array::from(vec![
-                None,
-                None,
-                Some(9),
-            ])),
+            Arc::new(Int32Array::from(vec![4, 5, 6])),
+            Arc::new(Int32Array::from(vec![7, 8, 9])),
+            Arc::new(UInt64Array::from(vec![None, None, Some(9)])),
         ],
     )
     .unwrap();
     batch
 }
-
 
 pub fn create_batch1(n: usize) -> RecordBatch {
     let schema = Arc::new(Schema::new(vec![

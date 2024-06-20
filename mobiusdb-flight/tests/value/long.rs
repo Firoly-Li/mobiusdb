@@ -1,3 +1,2 @@
-
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 pub struct Long(i64);

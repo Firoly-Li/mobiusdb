@@ -36,19 +36,8 @@ impl ActiveWal {
         // 当前文件的下标
         let position = file.metadata().await.unwrap().len();
         // let mut v_len = 0;
-        let mut index = Index::from(position as usize);
-        // println!("初始偏移量: {}", position);
+        let mut index = Index::from((position + 4) as usize);
         let mut wal_buf = BytesMut::new();
-        // for fd in fds {
-        //     println!("偏移量: {}", position);
-        //     let mut buf = BytesMut::new();
-        //     let _ = fd.encode(&mut buf);
-        //     let len = buf.len() as u32;
-        //     v_len += len;
-        //     data_buf.put(buf);
-        //     index.add_index(len);
-        //     position += len as u64;
-        // }
         let wal_msg = WalMsg::from(fds);
         wal_msg.encode(&mut wal_buf);
         let v_len = wal_buf.len() as u32;
@@ -57,14 +46,14 @@ impl ActiveWal {
         bytes.put_u32(v_len);
         bytes.put(wal_buf);
         file.write_all(&bytes.freeze()).await.expect("Failed to write");
-        index.update((v_len + 4) as usize);
+        index.update((v_len) as usize);
         Ok(index)
     }
 
     /**
-     * 根据index读取一条数据
+     * 根据index读取一条数据,这个offset是WalHeader + WalMsg的偏移量
      */
-    pub async fn read(&self, offset: usize) -> Result<WalMsg> {
+    pub async fn read_with_offset(&self, offset: usize) -> Result<WalMsg> {
         let mut file = self.wal.lock().await;
         file.seek(SeekFrom::Start(offset as u64)).await
         .expect("Failed to seek");
@@ -74,6 +63,17 @@ impl ActiveWal {
         let len = BytesMut::from(lens.as_slice()).get_u32();
         println!("len: {}", len);
         let mut buf = vec![0; len as usize];
+        file.read_exact(&mut buf).await.expect("Failed to read");
+        let buf_mut = BytesMut::from(buf.as_slice());
+        let wal_msg = WalMsg::decode(buf_mut.freeze());
+        Ok(wal_msg)
+    }
+
+    pub async fn read_with_index(&self, offset: Index) -> Result<WalMsg> { 
+        let mut file = self.wal.lock().await;
+        file.seek(SeekFrom::Start(offset.offset as u64)).await
+        .expect("Failed to seek");
+        let mut buf = vec![0; offset.len as usize];
         file.read_exact(&mut buf).await.expect("Failed to read");
         let buf_mut = BytesMut::from(buf.as_slice());
         let wal_msg = WalMsg::decode(buf_mut.freeze());
@@ -102,7 +102,7 @@ mod tests {
         let fds = create_datas("test");
         let index = active_wal.append(fds).await.unwrap();
         println!("index: {:?}", index);
-        let wal_msg = active_wal.read(index.offset).await.unwrap();
+        let wal_msg = active_wal.read_with_offset(index.offset-4).await.unwrap();
         let resp = wal_msg_to_batch(wal_msg).unwrap();
     }
 
@@ -111,8 +111,12 @@ mod tests {
         let active_wal =
             ActiveWal::new("/Users/firoly/Documents/code/rust/mobiusdb/mobiusdb-lsm/tmp/test.wal")
                 .await;
-        let wal_msg = active_wal.read(2055).await.unwrap();
+        let wal_msg = active_wal.read_with_offset(0).await.unwrap();
         let resp = wal_msg_to_batch(wal_msg).unwrap();
+        let index = Index { offset: 4, len: 2051, indexs: vec![] };
+        let wal_msg = active_wal.read_with_index(index).await.unwrap();
+        let resp1 = wal_msg_to_batch(wal_msg).unwrap();
+
     }
 
 

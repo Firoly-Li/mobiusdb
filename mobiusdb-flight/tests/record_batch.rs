@@ -1,8 +1,18 @@
-use std::{fmt::{self, Debug}, fs::File, io::Read};
+use std::{
+    fmt::{self, Debug},
+    fs::File,
+    io::Read,
+};
 
 use arrow::{
     array::RecordBatch,
-    ipc::{reader::StreamReader, writer::{DictionaryTracker, EncodedData, FileWriter, IpcDataGenerator, IpcWriteOptions, StreamWriter}},
+    ipc::{
+        reader::StreamReader,
+        writer::{
+            DictionaryTracker, EncodedData, FileWriter, IpcDataGenerator, IpcWriteOptions,
+            StreamWriter,
+        },
+    },
 };
 use bytes::BytesMut;
 use common::{
@@ -21,7 +31,6 @@ mod value {
     pub mod long;
     pub mod time;
 }
-
 
 #[test]
 fn read_wal() {
@@ -54,7 +63,6 @@ fn write_record_batch() {
     }
 }
 
-
 /**
  * 只写一条Batch，序列化写入之后读取，验证也入的数据格式
  */
@@ -83,14 +91,13 @@ fn write_batch_and_read_test() {
                     // println!("batch = {:?}",batch);
                     read_data.push(batch);
                     println!("success");
-                },
-                Err(e) => println!("e = {}",e),
+                }
+                Err(e) => println!("e = {}", e),
             }
         }
     }
     assert_eq!(writed_data, read_data);
 }
-
 
 /**
  * 当一个空白文件通过StreamWirter写入一个Batch的时候，数据可以直接写入
@@ -98,14 +105,13 @@ fn write_batch_and_read_test() {
  * 且StreamReader读取到DataTop的时候会报错：Ipc error: Not expecting a schema when messages are read
  */
 
-
 /**
  * 当文件通过StreamWriter写入相同结构的Batch的时候
- */ 
+ */
 
 /**
  * 当文件通过StreamWriter写入不同结构的Batch的时候
- */ 
+ */
 #[test]
 fn write_different_batchs_and_read_test() {
     let path = "/Users/firoly/Documents/code/rust/mobiusdb/mobiusdb-flight/tests/test1.arrow";
@@ -131,8 +137,8 @@ fn write_different_batchs_and_read_test() {
             match batch {
                 Ok(batc) => {
                     read_data.push(batc);
-                },
-                Err(e) => println!("e = {}",e),
+                }
+                Err(e) => println!("e = {}", e),
             }
         }
     }
@@ -157,19 +163,21 @@ fn read_file_test() {
     println!("buf = {:?}", buf);
 }
 
-
-
 #[test]
 fn ipc_generator() {
     let batch = create_short_batch();
     let generator = IpcDataGenerator::default();
     let mut tracker = DictionaryTracker::new(false);
     let opts = IpcWriteOptions::default();
-    let (r,s) = generator.encoded_batch(&batch, &mut tracker, &opts).unwrap();
+    let (r, s) = generator
+        .encoded_batch(&batch, &mut tracker, &opts)
+        .unwrap();
     println!("r = {:?}", r.len());
-    println!("s_ipc_msg = {:?},s_arrow_data = {:?}", s.ipc_message,s.arrow_data);
+    println!(
+        "s_ipc_msg = {:?},s_arrow_data = {:?}",
+        s.ipc_message, s.arrow_data
+    );
 }
-
 
 /**
  * todo 测试未通过
@@ -178,23 +186,23 @@ fn ipc_generator() {
 fn file_wirte_test() {
     let path = "/Users/firoly/Documents/code/rust/mobiusdb/mobiusdb-flight/tests/test3.arrow";
     {
-    let file = open_file(path);
-    let batch = create_batch();
-    let schema = batch.schema();
-    let batch1 = create_batch1(10);
-    let schema1 = batch1.schema();
-    {
-        let mut writer = FileWriter::try_new(&file, &schema).unwrap();
-        // 写入第一个 RecordBatch
-        writer.write(&batch).unwrap();
-        let _ = writer.finish();
-    }
-    {
-        let mut writer = FileWriter::try_new(&file, &schema1).unwrap();
-        // 写入第一个 RecordBatch
-        writer.write(&batch1).unwrap();
-        let _ = writer.finish();
-    }
+        let file = open_file(path);
+        let batch = create_batch();
+        let schema = batch.schema();
+        let batch1 = create_batch1(10);
+        let schema1 = batch1.schema();
+        {
+            let mut writer = FileWriter::try_new(&file, &schema).unwrap();
+            // 写入第一个 RecordBatch
+            writer.write(&batch).unwrap();
+            let _ = writer.finish();
+        }
+        {
+            let mut writer = FileWriter::try_new(&file, &schema1).unwrap();
+            // 写入第一个 RecordBatch
+            writer.write(&batch1).unwrap();
+            let _ = writer.finish();
+        }
     }
     {
         let file = open_file(path);
@@ -206,6 +214,4 @@ fn file_wirte_test() {
             }
         }
     }
-    
-    
 }

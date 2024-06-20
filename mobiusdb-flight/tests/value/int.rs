@@ -1,3 +1,2 @@
-
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 pub struct Int(i32);
