@@ -76,9 +76,35 @@
 
 
 
+---
 
+### Mobiusdb-flight模块
 
+mobius-flight模块是mobiusdb的网络层，主要用于处理网络服务，采用了arrow-flight为交互协议。
 
+- [ ] 修改返回的流的数据结构
+
+---
+
+### Mobiusdb-lsm模块
+
+mobius-lsm模块是mobiusdb的持久层，通过LSM树实现了数据的高效落盘。
+
+![LSM tree](/Users/firoly/Documents/code/rust/mobiusdb/reademe_imgs/LSMtree.jpg)
+
+#### WALLog
+
+- [x] WalMsg结构设计
+- [ ] WalLog文件的读写
+- [ ] WalLog文件的管理流程
+
+#### MemTable
+
+- [ ] MemTable的结构设计
+
+#### SSTable
+
+- [ ] Parquet文件的合并
 
 
 
