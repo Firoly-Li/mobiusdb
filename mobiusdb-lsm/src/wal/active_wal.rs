@@ -22,6 +22,7 @@ const MAX_SIZE: usize = 1024 * 1024 * 1024;
 #[derive(Debug, Clone)]
 pub struct ActiveWal {
     name: String,
+    write_enable: bool,
     wal: Arc<Mutex<File>>,
     max_size: usize,
     size: usize,
@@ -39,6 +40,7 @@ impl ActiveWal {
         let position = file.metadata().await.unwrap().len() as usize;
         Self {
             name: file_name,
+            write_enable: true,
             wal: Arc::new(Mutex::new(file)),
             max_size: MAX_SIZE,
             size: position,
@@ -54,6 +56,7 @@ impl ActiveWal {
         let position = file.metadata().await.unwrap().len() as usize;
         Self {
             name: file_name,
+            write_enable: false,
             wal: Arc::new(Mutex::new(file)),
             max_size: MAX_SIZE,
             size: position,
@@ -71,6 +74,7 @@ impl ActiveWal {
         let position = file.metadata().await.unwrap().len() as usize;
         Self {
             name: file_name,
+            write_enable: true,
             wal: Arc::new(Mutex::new(file)),
             max_size,
             size: position,
@@ -90,21 +94,28 @@ impl ActiveWal {
      * 新增一条数据
      */
     async fn append<T: ::prost::Message>(&mut self, fds: Vec<T>) -> Result<Offset> {
+        if !self.write_enable {
+            return Err(anyhow::Error::msg("wal file is not writeable"));
+        }
         let wal_msg = WalMsg::from(fds);
         self.append_wal_msg(wal_msg).await
     }
 
     async fn append_wal_msg(&mut self, wal_msg: WalMsg) -> Result<Offset> {
+        if !self.write_enable {
+            return Err(anyhow::Error::msg("wal file is not writeable"));
+        }
         let mut wal_buf = BytesMut::new();
         wal_msg.encode(&mut wal_buf);
         self.append_bytes(wal_buf.freeze()).await
     }
 
     async fn append_bytes(&mut self, bytes: Bytes) -> Result<Offset> {
+        if !self.write_enable {
+            return Err(anyhow::Error::msg("wal file is not writeable"));
+        }
         let mut file = self.wal.lock().await;
         // 当前文件的下标
-        // let position = file.metadata().await.unwrap().len();
-        // println!("position: {}", position);
         if self.size > self.max_size {
             return Err(anyhow::Error::msg("Wal file is full"));
         }
@@ -167,6 +178,9 @@ where
 {
     type Result = Result<Offset>;
     async fn append(&mut self, data: T) -> Self::Result {
+        if !self.write_enable {
+            return Err(anyhow::Error::msg("wal file is not writeable"));
+        }
         self.append_wal_msg(data.into_wal_msg()).await
     }
 }
@@ -182,10 +196,24 @@ mod tests {
         utils::{batches_to_flight_data, flight_data_to_batches},
         FlightData,
     };
+    use bytes::Bytes;
     use prost::Message;
     use std::sync::Arc;
 
     use crate::wal::{active_wal::ActiveWal, offset::Offset, wal_msg::WalMsg};
+
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn active_wal_open_test() {
+        let mut active_wal =
+            ActiveWal::open("/Users/firoly/Documents/code/rust/mobiusdb/mobiusdb-lsm/tmp/test2.wal")
+                .await;
+        let resp = active_wal.append_bytes(Bytes::from_static(b"test")).await;
+        // println!("resp: {:?}", resp);
+        assert_eq!(resp.is_err(), true);
+    }
+
+
 
     /**
      * 测试ActiveWal的读写
