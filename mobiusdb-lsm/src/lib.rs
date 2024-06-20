@@ -10,6 +10,7 @@ pub mod wal;
 #[derive(Debug)]
 pub enum LsmCommand {
     Append(Vec<FlightData>),
+    OffsetList(String)
 }
 
 pub struct LsmServer {
@@ -31,6 +32,9 @@ impl LsmServer {
                         if !b {
                             break;
                         }
+                    }
+                    LsmCommand::OffsetList(file_name) => {
+                        
                     }
                 }
             }

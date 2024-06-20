@@ -2,6 +2,8 @@ pub mod active_wal;
 pub(crate) mod offset;
 pub mod wal_msg;
 
+use std::collections::HashMap;
+
 use active_wal::ActiveWal;
 use offset::Offset;
 use wal_msg::IntoWalMsg;
@@ -17,6 +19,7 @@ pub struct WalService {
     wal: ActiveWal,
     wal_max_size: usize,
     indexs: Vec<Offset>,
+    indexs_map: HashMap<String,Vec<Offset>>
 }
 
 impl WalService {
@@ -24,7 +27,8 @@ impl WalService {
         Self {
             wal: ActiveWal::with_size(&path.into(),wal_size).await,
             wal_max_size: wal_size,
-            indexs: Vec::new()
+            indexs: Vec::new(),
+            indexs_map: HashMap::new()
         }
     }
 }
@@ -41,6 +45,7 @@ where
             Ok(_) => true,
             Err(e) => {
                 println!("e = {:?}",e);
+                self.indexs_map.insert(self.wal.name(), self.indexs.clone());
                 false
             }
         }

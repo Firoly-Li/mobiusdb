@@ -9,7 +9,7 @@ use tokio::{
     sync::Mutex,
 };
 
-use crate::{utils::file_utils::async_open_flie, wal::wal_msg::WalMsg};
+use crate::{utils::{file_utils::{async_open_flie, async_open_only_flie}, time_utils::now}, wal::wal_msg::WalMsg};
 
 use super::{offset::Offset, wal_msg::IntoWalMsg, Append};
 
@@ -21,6 +21,7 @@ const MAX_SIZE: usize = 1024 * 1024 * 1024;
  */
 #[derive(Debug, Clone)]
 pub struct ActiveWal {
+    name: String,
     wal: Arc<Mutex<File>>,
     max_size: usize,
     size: usize,
@@ -28,9 +29,31 @@ pub struct ActiveWal {
 
 impl ActiveWal {
     pub async fn new(path: &str) -> Self {
-        let file = async_open_flie(path).await;
+        let file_name = now().to_string() + ".wal";
+        let path = if path.ends_with("/") {
+            format!("{}{}", path, file_name)
+        }else {
+            format!("{}/{}", path, file_name)
+        };
+        let file = async_open_flie(path.as_str()).await;
         let position = file.metadata().await.unwrap().len() as usize;
         Self {
+            name: file_name,
+            wal: Arc::new(Mutex::new(file)),
+            max_size: MAX_SIZE,
+            size: position,
+        }
+    }
+
+    /**
+     * 打开wal文件,此时wal文件为只读模式
+     */
+    pub async fn open(path: &str) -> Self {
+        let file_name = path.split("/").collect::<Vec<&str>>().last().unwrap().to_string();
+        let file = async_open_only_flie(path).await;
+        let position = file.metadata().await.unwrap().len() as usize;
+        Self {
+            name: file_name,
             wal: Arc::new(Mutex::new(file)),
             max_size: MAX_SIZE,
             size: position,
@@ -38,13 +61,24 @@ impl ActiveWal {
     }
 
     pub async fn with_size(path: &str, max_size: usize) -> Self {
-        let file = async_open_flie(path).await;
+        let file_name = now().to_string() + ".wal";
+        let path = if path.ends_with("/") {
+            format!("{}{}", path, file_name)
+        }else {
+            format!("{}/{}", path, file_name)
+        };
+        let file = async_open_flie(path.as_str()).await;
         let position = file.metadata().await.unwrap().len() as usize;
         Self {
+            name: file_name,
             wal: Arc::new(Mutex::new(file)),
             max_size,
             size: position,
         }
+    }
+
+    pub fn name(&self) -> String {
+        self.name.clone()
     }
 }
 
@@ -159,7 +193,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn activewal_should_be_work() {
         let mut active_wal =
-            ActiveWal::new("/Users/firoly/Documents/code/rust/mobiusdb/mobiusdb-lsm/tmp/test.wal")
+            ActiveWal::new("/Users/firoly/Documents/code/rust/mobiusdb/mobiusdb-lsm/tmp/")
                 .await;
         let fds = create_datas("test");
         let index = active_wal.append(fds).await.unwrap();
@@ -174,7 +208,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn read_test() {
         let active_wal =
-            ActiveWal::new("/Users/firoly/Documents/code/rust/mobiusdb/mobiusdb-lsm/tmp/test.wal")
+            ActiveWal::open("/Users/firoly/Documents/code/rust/mobiusdb/mobiusdb-lsm/tmp/test.wal")
                 .await;
         let wal_msg = active_wal.read_with_offset(0).await.unwrap();
         let resp = wal_msg_to_batch(wal_msg).unwrap();
@@ -192,7 +226,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn active_wal_write_diff_data_test() {
         let mut active_wal =
-            ActiveWal::new("/Users/firoly/Documents/code/rust/mobiusdb/mobiusdb-lsm/tmp/test1.wal")
+            ActiveWal::new("/Users/firoly/Documents/code/rust/mobiusdb/mobiusdb-lsm/tmp/")
                 .await;
         let mut indexs = Vec::new();
         // 写入数据

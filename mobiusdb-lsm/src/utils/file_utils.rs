@@ -11,6 +11,18 @@ pub async fn async_open_flie(path: &str) -> tokio::fs::File {
     opts
 }
 
+pub async fn async_open_only_flie(path: &str) -> tokio::fs::File {
+    if let false = async_is_file(path).await {
+        tokio::fs::File::create(path).await.unwrap();
+    }
+    let opts = tokio::fs::OpenOptions::new()
+        .read(true)
+        .open(path)
+        .await
+        .unwrap();
+    opts
+}
+
 pub async fn async_is_file(path: &str) -> bool {
     let r = match tokio::fs::metadata(path).await {
         Ok(metadata) => {

@@ -10,7 +10,7 @@ use tokio::time::sleep;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn server_append_should_be_work() {
-    let path = "/Users/firoly/Documents/code/rust/mobiusdb/mobiusdb-lsm/tmp/test2.wal";
+    let path = "/Users/firoly/Documents/code/rust/mobiusdb/mobiusdb-lsm/tmp/";
     let wal_size = 1024 * 1024;
     let sender = server(path,wal_size).await;
 
