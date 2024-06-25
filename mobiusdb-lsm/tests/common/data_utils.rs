@@ -1,10 +1,15 @@
-use std::sync::Arc;
 use anyhow::Result;
-use arrow::{array::{Int32Array, RecordBatch, StringArray, UInt64Array}, datatypes::*};
-use arrow_flight::{utils::{batches_to_flight_data, flight_data_to_batches}, FlightData};
+use arrow::{
+    array::{Int32Array, RecordBatch, StringArray, UInt64Array},
+    datatypes::*,
+};
+use arrow_flight::{
+    utils::{batches_to_flight_data, flight_data_to_batches},
+    FlightData,
+};
 use mobiusdb_lsm::wal::wal_msg::WalMsg;
 use prost::Message;
-
+use std::sync::Arc;
 
 pub fn create_data(n: impl Into<String>) -> Vec<FlightData> {
     let batch = create_short_batch(n);

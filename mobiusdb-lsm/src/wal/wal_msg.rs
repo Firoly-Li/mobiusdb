@@ -1,6 +1,8 @@
 use arrow_flight::FlightData;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 
+use super::{offset::Offset, serialization::Decoder};
+
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct WalMsg {
     num: u16,
@@ -15,6 +17,12 @@ impl WalMsg {
 
     pub fn bytes(&self) -> Bytes {
         self.bytes.clone()
+    }
+
+    pub fn encode_len(&self) -> usize {
+        let mut n = (self.num * 4) as usize;
+        n += self.bytes.len();
+        n
     }
 }
 
@@ -83,6 +91,43 @@ impl WalMsg {
     }
 }
 
+impl Decoder for Vec<WalMsg> {
+    type Error = anyhow::Error;
+
+    fn decode(mut bytes: Bytes) -> anyhow::Result<Self, Self::Error> {
+        println!("start decode bytes len = {}",bytes.len());
+        let mut wal_msgs = Vec::new();
+        while bytes.len() > 4 {
+            let wal_msg_len = bytes.get_u32();
+            println!("本次循环：wal_msg_len = {}，bytes len = {}",wal_msg_len,bytes.len());
+            if bytes.len() < wal_msg_len as usize {
+                println!("bytes len = {},wal_msg_len = {}",bytes.len(),wal_msg_len);
+                return Err(anyhow::Error::msg("1234"));
+            }
+            let buf = bytes.split_to(wal_msg_len as usize);
+            println!("after split off bytes len = {}",bytes.len());
+            let wal_msg = WalMsg::decode(buf);
+            wal_msgs.push(wal_msg);
+        }
+        Ok(wal_msgs)
+    }
+}
+
+pub fn walmsgs_to_offsets(walmsgs: &Vec<WalMsg>) -> Vec<Offset> {
+    let mut offsets = Vec::new();
+    let mut offset = 0;
+    for wal_msg in walmsgs {
+        let wal_msg_len = wal_msg.encode_len();
+        let offset_obj = Offset {
+            offset,
+            len: wal_msg_len,
+        };
+        offsets.push(offset_obj);
+        offset += wal_msg_len;
+    }
+    offsets
+}
+
 pub trait IntoWalMsg {
     fn into_wal_msg(&self) -> WalMsg;
 }
@@ -102,7 +147,9 @@ mod tests {
         datatypes::*,
     };
     use arrow_flight::{utils::batches_to_flight_data, FlightData};
-    use bytes::BytesMut;
+    use bytes::{BufMut, Bytes, BytesMut};
+
+    use crate::wal::serialization::Decoder;
 
     use super::WalMsg;
 
@@ -116,6 +163,13 @@ mod tests {
         let wal_msg1 = WalMsg::decode(buf.freeze());
         println!("wal_msg1: {:?}", wal_msg1);
         assert_eq!(wal_msg, wal_msg1);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn wal_msg_encode_and_decode_test1() {
+        let buf = create_bytes_from_walmsgs(20);
+        let vecs = Vec::<WalMsg>::decode(buf);
+        println!("v: {:?}", vecs);
     }
 
     fn create_datas(n: impl Into<String>) -> Vec<FlightData> {
@@ -152,5 +206,24 @@ mod tests {
         )
         .unwrap();
         batch
+    }
+
+
+
+    pub fn create_bytes_from_walmsgs(num: usize) -> Bytes {
+        let mut resp = BytesMut::new();
+        let b = Bytes::from("hello world !");
+        for i in 0..num {
+           let wal_msg =  WalMsg {
+                num: i as u16,
+                indexs: vec![45;i],
+                bytes: b.clone(),
+            };
+            let mut buf = BytesMut::new();
+            wal_msg.encode(&mut buf);
+            resp.put_u32(buf.len() as u32);
+            resp.put(buf);
+        }
+        resp.freeze()
     }
 }

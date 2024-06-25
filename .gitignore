@@ -1,1 +1,7 @@
 /target
+.idea/.gitignore
+.idea/mobiusdb.iml
+.idea/modules.xml
+.idea/vcs.xml
+*.wal
+*.arrow

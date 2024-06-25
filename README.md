@@ -96,10 +96,13 @@ mobius-lsm模块是mobiusdb的持久层，通过LSM树实现了数据的高效�
 
 - [x] WalMsg结构设计
 - [x] WalLog文件的读写
-- [ ] WalLog文件的管理流程
+- [x] WalLog文件的管理流程
   - [x] WalLog文件大小设置
   - [x] WalLog持续写入
-  - [ ] 重启恢复
+  - [x] 重启恢复
+    - [x] 新增WalLog的load( )
+    - [x] Vec<WalMsg>的Decode方法
+    - [ ] 
 
 #### MemTable
 
@@ -107,7 +110,9 @@ mobius-lsm模块是mobiusdb的持久层，通过LSM树实现了数据的高效�
 
 #### SSTable
 
+- [ ] MemTable落盘Parquet文件
 - [ ] Parquet文件的合并
+- [ ] SSTable数据查询
 
 
 

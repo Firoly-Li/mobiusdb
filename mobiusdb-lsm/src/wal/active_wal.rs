@@ -1,7 +1,6 @@
 use std::{io::SeekFrom, sync::Arc};
 
-use anyhow::{Ok, Result};
-use arrow_flight::FlightData;
+use anyhow::Result;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use tokio::{
     fs::File,
@@ -9,12 +8,20 @@ use tokio::{
     sync::Mutex,
 };
 
-use crate::{utils::{file_utils::{async_open_flie, async_open_only_flie}, time_utils::now}, wal::wal_msg::WalMsg};
+use crate::{
+    utils::{
+        file_utils::{async_open_flie, async_open_only_read_flie},
+        time_utils::now,
+    },
+    wal::wal_msg::WalMsg,
+};
 
-use super::{offset::Offset, wal_msg::IntoWalMsg, Append};
+use super::{offset::Offset, serialization::Decoder, wal_msg::{walmsgs_to_offsets, IntoWalMsg}, Append};
 
 // 默认wal文件大小: 1G
 const MAX_SIZE: usize = 1024 * 1024 * 1024;
+
+const WAL: &'static str = ".wal";
 
 /**
  * 活动的wal文件，wal文件是顺序写入的
@@ -29,56 +36,115 @@ pub struct ActiveWal {
 }
 
 impl ActiveWal {
-    pub async fn new(path: &str) -> Self {
-        let file_name = now().to_string() + ".wal";
+    pub async fn new(path: &str) -> Result<Self> {
+        let file_name = now().to_string() + WAL;
         let path = if path.ends_with("/") {
             format!("{}{}", path, file_name)
-        }else {
+        } else {
             format!("{}/{}", path, file_name)
         };
-        let file = async_open_flie(path.as_str()).await;
-        let position = file.metadata().await.unwrap().len() as usize;
-        Self {
+        let file = async_open_flie(path.as_str()).await?;
+        let position = file.metadata().await?.len() as usize;
+        Ok(Self {
             name: file_name,
             write_enable: true,
             wal: Arc::new(Mutex::new(file)),
             max_size: MAX_SIZE,
             size: position,
-        }
+        })
+    }
+
+    /**
+     * 加载wal文件，此时wal文件为读写模式
+     * 加载wal文件时，会读取wal所有文件，并对其构建索引
+     */
+    pub async fn load(path: &str) -> Result<(Self, Vec<Offset>)> {
+        // let mut offsets = Vec::new();
+        let file_name = path
+            .split("/")
+            .collect::<Vec<&str>>()
+            .last()
+            .unwrap()
+            .to_string();
+        let mut file = async_open_flie(path).await?;
+
+        let position = file.metadata().await?.len() as usize;
+        // println!("position = {}",position);
+        let wal_msgs = {
+            let mut buf = Vec::new();
+            // println!("buf len = {}",buf.len());
+            file.read_to_end(&mut buf).await?;
+            let vs = Vec::<WalMsg>::decode(Bytes::from(buf));
+            vs.unwrap()
+        };
+        // println!("wal_msgs_len = {}",wal_msgs.len());
+        let offsets = walmsgs_to_offsets(&wal_msgs);
+        Ok((
+            Self {
+                name: file_name,
+                write_enable: false,
+                wal: Arc::new(Mutex::new(file)),
+                max_size: MAX_SIZE,
+                size: position,
+            },offsets
+        ))
     }
 
     /**
      * 打开wal文件,此时wal文件为只读模式
      */
-    pub async fn open(path: &str) -> Self {
-        let file_name = path.split("/").collect::<Vec<&str>>().last().unwrap().to_string();
-        let file = async_open_only_flie(path).await;
-        let position = file.metadata().await.unwrap().len() as usize;
-        Self {
+    pub async fn open(path: &str) -> Result<Self> {
+        let file_name = path
+            .split("/")
+            .collect::<Vec<&str>>()
+            .last()
+            .unwrap()
+            .to_string();
+        let file = async_open_only_read_flie(path).await;
+        let position = file.metadata().await?.len() as usize;
+        Ok(Self {
             name: file_name,
             write_enable: false,
             wal: Arc::new(Mutex::new(file)),
             max_size: MAX_SIZE,
             size: position,
-        }
+        })
     }
 
-    pub async fn with_size(path: &str, max_size: usize) -> Self {
+    pub async fn with_size(path: &str, max_size: usize) -> Result<Self> {
         let file_name = now().to_string() + ".wal";
         let path = if path.ends_with("/") {
             format!("{}{}", path, file_name)
-        }else {
+        } else {
             format!("{}/{}", path, file_name)
         };
-        let file = async_open_flie(path.as_str()).await;
-        let position = file.metadata().await.unwrap().len() as usize;
-        Self {
+        let file = async_open_flie(path.as_str()).await?;
+        let position = file.metadata().await?.len() as usize;
+        Ok(Self {
             name: file_name,
             write_enable: true,
             wal: Arc::new(Mutex::new(file)),
             max_size,
             size: position,
-        }
+        })
+    }
+
+    pub async fn with_name(path: &str, file_name: &str, max_size: usize) -> Result<Self> {
+        let file_name = file_name.to_string() + ".wal";
+        let path = if path.ends_with("/") {
+            format!("{}{}", path, file_name)
+        } else {
+            format!("{}/{}", path, file_name)
+        };
+        let file = async_open_flie(path.as_str()).await?;
+        let position = file.metadata().await?.len() as usize;
+        Ok(Self {
+            name: file_name,
+            write_enable: true,
+            wal: Arc::new(Mutex::new(file)),
+            max_size,
+            size: position,
+        })
     }
 
     pub fn name(&self) -> String {
@@ -117,12 +183,11 @@ impl ActiveWal {
         let mut file = self.wal.lock().await;
         // 当前文件的下标
         if self.size > self.max_size {
+            self.write_enable = false;
             return Err(anyhow::Error::msg("Wal file is full"));
         }
-        // let mut v_len = 0;
         let mut index = Offset::from((self.size + 4) as usize);
         let v_len = bytes.len() as u32;
-        println!("wal_buf len: {}", v_len);
         let mut new_bytes = BytesMut::new();
         new_bytes.put_u32(v_len);
         new_bytes.put(bytes);
@@ -156,6 +221,9 @@ impl ActiveWal {
         Ok(wal_msg)
     }
 
+    /**
+     * 读取一条数据,这个offset是WalHeader + WalMsg的偏移量
+     */
     pub async fn read_with_index(&self, offset: Offset) -> Result<WalMsg> {
         let mut file = self.wal.lock().await;
         file.seek(SeekFrom::Start(offset.offset as u64))
@@ -187,7 +255,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use anyhow::{Ok, Result};
+    use anyhow::Result;
     use arrow::{
         array::{Int32Array, RecordBatch, StringArray, UInt64Array},
         datatypes::*,
@@ -202,43 +270,41 @@ mod tests {
 
     use crate::wal::{active_wal::ActiveWal, offset::Offset, wal_msg::WalMsg};
 
-
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn active_wal_open_test() {
-        let mut active_wal =
-            ActiveWal::open("/Users/firoly/Documents/code/rust/mobiusdb/mobiusdb-lsm/tmp/test2.wal")
-                .await;
+    async fn active_wal_open_test() -> Result<()> {
+        let mut active_wal = ActiveWal::open(
+            "/Users/firoly/Documents/code/rust/mobiusdb/mobiusdb-lsm/tmp/test2.wal",
+        )
+        .await?;
         let resp = active_wal.append_bytes(Bytes::from_static(b"test")).await;
         // println!("resp: {:?}", resp);
         assert_eq!(resp.is_err(), true);
+        Ok(())
     }
-
-
-
     /**
      * 测试ActiveWal的读写
      */
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn activewal_should_be_work() {
+    async fn activewal_should_be_work() -> Result<()> {
         let mut active_wal =
-            ActiveWal::new("/Users/firoly/Documents/code/rust/mobiusdb/mobiusdb-lsm/tmp/")
-                .await;
+            ActiveWal::new("/Users/firoly/Documents/code/rust/mobiusdb/mobiusdb-lsm/tmp/").await?;
         let fds = create_datas("test");
         let index = active_wal.append(fds).await.unwrap();
         println!("index: {:?}", index);
         let wal_msg = active_wal.read_with_offset(index.offset - 4).await.unwrap();
         let resp = wal_msg_to_batch(wal_msg).unwrap();
+        Ok(())
     }
 
     /**
      * 测试ActiveWal的读
      */
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn read_test() {
+    async fn read_test() -> Result<()> {
         let active_wal =
             ActiveWal::open("/Users/firoly/Documents/code/rust/mobiusdb/mobiusdb-lsm/tmp/test.wal")
-                .await;
-        let wal_msg = active_wal.read_with_offset(0).await.unwrap();
+                .await?;
+        let wal_msg = active_wal.read_with_offset(0).await?;
         let resp = wal_msg_to_batch(wal_msg).unwrap();
         let index = Offset {
             offset: 4,
@@ -246,16 +312,16 @@ mod tests {
         };
         let wal_msg = active_wal.read_with_index(index).await.unwrap();
         let resp1 = wal_msg_to_batch(wal_msg).unwrap();
+        Ok(())
     }
 
     /**
      * 测试ActiveWal的写入不同的数据
      */
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn active_wal_write_diff_data_test() {
+    async fn active_wal_write_diff_data_test() -> Result<()> {
         let mut active_wal =
-            ActiveWal::new("/Users/firoly/Documents/code/rust/mobiusdb/mobiusdb-lsm/tmp/")
-                .await;
+            ActiveWal::new("/Users/firoly/Documents/code/rust/mobiusdb/mobiusdb-lsm/tmp/").await?;
         let mut indexs = Vec::new();
         // 写入数据
         for i in 0..10000 {
@@ -272,17 +338,23 @@ mod tests {
         // 读取数据
         let mut n = 0;
         for index in indexs {
-            let wal_msg1 = active_wal.read_with_index(index).await.unwrap();
-            let resp = wal_msg_to_batch(wal_msg1).unwrap();
+            let wal_msg1 = active_wal.read_with_index(index).await?;
+            let _resp = wal_msg_to_batch(wal_msg1).unwrap();
             n += 1;
         }
         assert_eq!(n, indexs_len);
-
-        // let wal_msg = active_wal.read_with_offset(index.offset - 4).await.unwrap();
-        // let resp = wal_msg_to_batch(wal_msg).unwrap();
-        // let wal_msg1 = active_wal.read_with_index(index1).await.unwrap();
-        // let resp = wal_msg_to_batch(wal_msg1).unwrap();
+        Ok(())
     }
+
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn file_load_test(){
+        let file_path = "/Users/firoly/Documents/code/rust/mobiusdb/mobiusdb-lsm/tmp/test2.wal";
+        let (wal,offsets) = ActiveWal::load(file_path).await.unwrap();
+        println!("offsets = {:?}",offsets);
+    }
+
+
 
     fn create_data(n: impl Into<String>) -> Vec<FlightData> {
         let batch = create_short_batch(n);
