@@ -102,7 +102,6 @@ mobius-lsm模块是mobiusdb的持久层，通过LSM树实现了数据的高效�
   - [x] 重启恢复
     - [x] 新增WalLog的load( )
     - [x] Vec<WalMsg>的Decode方法
-    - [ ] 
 
 #### MemTable
 

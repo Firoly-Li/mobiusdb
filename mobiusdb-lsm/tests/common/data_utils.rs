@@ -9,7 +9,7 @@ use arrow_flight::{
 };
 use mobiusdb_lsm::wal::wal_msg::WalMsg;
 use prost::Message;
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 pub fn create_data(n: impl Into<String>) -> Vec<FlightData> {
     let batch = create_short_batch(n);
@@ -97,4 +97,106 @@ pub fn wal_msg_to_batch(wal_msg: WalMsg) -> Result<Vec<RecordBatch>> {
     let resp = flight_data_to_batches(&resp).unwrap();
     // println!("resp: {:?}", resp);
     Ok(resp)
+}
+
+pub fn create_teacher(class_name: &str) -> RecordBatch {
+    let schema = Arc::new(Schema::new(vec![
+        Field::new("name", DataType::Utf8, true),
+        Field::new("age", DataType::Int32, true),
+        Field::new("teach", DataType::Utf8, true),
+    ]).with_metadata({
+        let mut map = HashMap::new();
+        map.insert("table_name".to_string(), class_name.to_string());
+        map
+    }));
+    let batch = RecordBatch::try_new(
+        schema.clone(),
+        vec![
+            Arc::new(StringArray::from(vec!["James".to_string(), "Michael".to_string(), "David".to_string()])),
+            Arc::new(Int32Array::from(vec![18, 19, 20])),
+            Arc::new(StringArray::from(vec!["Computer".to_string(), "language".to_string(), "Music".to_string()])),
+        ],
+    )
+    .unwrap();
+    batch
+}
+
+pub fn create_students(class_name: &str, names: Vec<String>,ages: Vec<i32>,address: Vec<String>) -> RecordBatch {
+    let schema = Arc::new(Schema::new(vec![
+        Field::new("name", DataType::Utf8, true),
+        Field::new("age", DataType::Int32, true),
+        Field::new("address", DataType::Utf8, true),
+    ]).with_metadata({
+        let mut map = HashMap::new();
+        map.insert("table_name".to_string(), class_name.to_string());
+        map
+    }));
+
+    let batch = RecordBatch::try_new(
+        schema.clone(),
+        vec![
+            Arc::new(StringArray::from(names)),
+            Arc::new(Int32Array::from(ages)),
+            Arc::new(StringArray::from(address)),
+        ],
+    )
+    .unwrap();
+    batch
+}
+
+
+
+pub fn create_student_batch1(name: &str,age: i32) -> RecordBatch {
+    let schema = Arc::new(Schema::new(vec![
+        Field::new("name", DataType::Utf8, true),
+        Field::new("age", DataType::Int32, true),
+        Field::new("address", DataType::Int32, true),
+    ]));
+
+    let batch = RecordBatch::try_new(
+        schema.clone(),
+        vec![
+            Arc::new(StringArray::from(vec![name.to_string(), "Tom".to_string(), "Jack".to_string()])),
+            Arc::new(Int32Array::from(vec![age, 19, 20])),
+            Arc::new(Int32Array::from(vec![71, 81, 91])),
+        ],
+    )
+    .unwrap();
+    batch
+}
+
+pub fn create_student_batch2() -> RecordBatch {
+    let schema = Arc::new(Schema::new(vec![
+        Field::new("name", DataType::Utf8, true),
+        Field::new("age", DataType::Int32, true),
+    ]));
+
+    let batch = RecordBatch::try_new(
+        schema.clone(),
+        vec![
+            Arc::new(StringArray::from(vec!["John1".to_string(), "Tom1".to_string(), "Jack1".to_string()])),
+            Arc::new(Int32Array::from(vec![18, 19, 20])),
+        ],
+    )
+    .unwrap();
+    batch
+}
+
+pub fn create_teacher_batch2() -> RecordBatch {
+    let schema = Arc::new(Schema::new(vec![
+        Field::new("name", DataType::Utf8, true),
+        Field::new("age", DataType::Int32, true),
+        Field::new("teach", DataType::Utf8, true),
+    ]));
+
+    let batch = RecordBatch::try_new(
+        schema.clone(),
+        vec![
+            Arc::new(StringArray::from(vec!["James".to_string(), "Michael".to_string(), "David".to_string()])),
+            Arc::new(Int32Array::from(vec![18, 19, 20])),
+            Arc::new(StringArray::from(vec!["Computer".to_string(), "language".to_string(), "Music".to_string()])),
+        ],
+    )
+    .unwrap();
+    batch
 }

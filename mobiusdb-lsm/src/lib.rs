@@ -6,7 +6,7 @@ use tokio::sync::{
 };
 use wal::{offset::Offset, Append, WalService};
 
-mod memtable;
+pub mod memtable;
 mod sstable;
 mod utils;
 pub mod wal;

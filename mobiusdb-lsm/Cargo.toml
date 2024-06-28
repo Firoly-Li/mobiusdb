@@ -6,8 +6,10 @@ edition = "2021"
 [dependencies]
 anyhow = {workspace = true}
 thiserror = {workspace = true}
+arrow = {workspace = true}
 arrow-flight = { workspace = true }
 bytes = {workspace = true}
+datafusion = {workspace = true}
 tokio = {workspace = true}
 prost = {workspace = true}
 
