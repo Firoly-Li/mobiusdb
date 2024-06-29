@@ -51,10 +51,10 @@ impl WalService {
                         let file_name = files_name.last().unwrap();
                         let file_path = path.clone() + "/"+file_name;
                         let a: Vec<&str> = file_name.split(".").collect();
-                        print!("file_path = {}",file_path);
+                        // print!("file_path = {}",file_path);
                         // 1、加载wal文件
                         let (wal,offsets) = ActiveWal::load(file_path.as_str()).await.unwrap();
-                        println!("offsets = {:?}",offsets);
+                        // println!("offsets = {:?}",offsets);
 
                         // 3、创建
                         Ok(Self {
@@ -102,6 +102,7 @@ where
 
     async fn append(&mut self, data: T) -> Self::Result {
         loop {
+            // 1、数据落盘
             let resp = self.wal.append(data.clone()).await;
             let resp = match resp {
                 Ok(offset) => {

@@ -189,8 +189,8 @@ impl ActiveWal {
         let mut index = Offset::from((self.size + 4) as usize);
         let v_len = bytes.len() as u32;
         let mut new_bytes = BytesMut::new();
-        new_bytes.put_u32(v_len);
-        new_bytes.put(bytes);
+        new_bytes.put_u32(v_len);// 写入数据长度
+        new_bytes.put(bytes); // 写入数据
         file.write_all(&new_bytes).await.expect("Failed to write");
         index.update((v_len) as usize);
         let add_size = (v_len + 4) as usize;

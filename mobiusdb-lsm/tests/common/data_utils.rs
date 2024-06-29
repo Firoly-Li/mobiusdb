@@ -7,12 +7,12 @@ use arrow_flight::{
     utils::{batches_to_flight_data, flight_data_to_batches},
     FlightData,
 };
-use mobiusdb_lsm::wal::wal_msg::WalMsg;
+use mobiusdb_lsm::{wal::wal_msg::WalMsg, TABLE_NAME};
 use prost::Message;
 use std::{collections::HashMap, sync::Arc};
 
 pub fn create_data(n: impl Into<String>) -> Vec<FlightData> {
-    let batch = create_short_batch(n);
+    let batch = create_short_batch(n.into().as_str());
     let schema = batch.schema();
     let mut v = Vec::new();
     v.push(batch);
@@ -106,7 +106,7 @@ pub fn create_teacher(class_name: &str) -> RecordBatch {
         Field::new("teach", DataType::Utf8, true),
     ]).with_metadata({
         let mut map = HashMap::new();
-        map.insert("table_name".to_string(), class_name.to_string());
+        map.insert(TABLE_NAME.to_string(), class_name.to_string());
         map
     }));
     let batch = RecordBatch::try_new(
@@ -128,7 +128,7 @@ pub fn create_students(class_name: &str, names: Vec<String>,ages: Vec<i32>,addre
         Field::new("address", DataType::Utf8, true),
     ]).with_metadata({
         let mut map = HashMap::new();
-        map.insert("table_name".to_string(), class_name.to_string());
+        map.insert(TABLE_NAME.to_string(), class_name.to_string());
         map
     }));
 

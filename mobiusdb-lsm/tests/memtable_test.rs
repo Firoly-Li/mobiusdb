@@ -27,7 +27,7 @@ fn create_group2_student() -> RecordBatch {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_memtable() {
-    let memtable = MemTable::new();
+    let mut memtable = MemTable::new();
     let group1 = create_group1_student();
     let group2 = create_group2_student();
     let teachers = create_teacher("三年级二班");
@@ -45,7 +45,7 @@ async fn test_memtable() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn query_test() {
-    let mem_table = MemTable::new();
+    let mut mem_table = MemTable::new();
     let group1 = create_group1_student();
     mem_table.insert(group1).await;
     let resp = mem_table.query("select name from 三年级二班").await;
