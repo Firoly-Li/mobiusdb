@@ -1,25 +1,27 @@
-use std::{collections::HashSet, sync::Arc};
 use anyhow::Result;
-use arrow::{array::{make_array, Array, ArrayData, RecordBatch, RecordBatchOptions}, compute::concat ,datatypes::{Field, Schema, SchemaRef}, error::ArrowError};
+use arrow::{
+    array::{make_array, Array, ArrayData, RecordBatch, RecordBatchOptions},
+    compute::concat,
+    datatypes::{Field, Schema, SchemaRef},
+    error::ArrowError,
+};
+use std::{collections::HashSet, sync::Arc};
 
-
-
-
-
-
-pub fn merge_batches<'a>(input_batches: impl IntoIterator<Item = &'a RecordBatch> + Clone) -> Result<RecordBatch> {
-    let schemas: Vec<Arc<Schema>> = input_batches.clone().into_iter().map(|batch|batch.schema()).collect();
+pub fn merge_batches<'a>(
+    input_batches: impl IntoIterator<Item = &'a RecordBatch> + Clone,
+) -> Result<RecordBatch> {
+    let schemas: Vec<Arc<Schema>> = input_batches
+        .clone()
+        .into_iter()
+        .map(|batch| batch.schema())
+        .collect();
     if let Ok(schema) = merge_schemas(schemas.clone()) {
         let resp = merge_batches_with_schema(&Arc::new(schema), input_batches)?;
         Ok(resp)
-    }else {
+    } else {
         Err(anyhow::Error::msg("message"))
     }
 }
-
-
-
-
 
 /**
  * 合并多个数组
@@ -47,9 +49,10 @@ pub fn merge_batches_with_schema<'a>(
     for i in 0..field_num {
         let ctype = fields[i].clone();
         let arr = array(&batches, ctype);
-        let array = arr.iter()
-    .map(|arc| arc.as_ref() as &dyn Array)
-    .collect::<Vec<_>>();
+        let array = arr
+            .iter()
+            .map(|arc| arc.as_ref() as &dyn Array)
+            .collect::<Vec<_>>();
         let array = concat(&array)?;
         arrays.push(array);
     }
@@ -57,28 +60,28 @@ pub fn merge_batches_with_schema<'a>(
     batch
 }
 
-
-fn array(batches: &Vec<&RecordBatch>,ctype: Arc<Field>) -> Vec<Arc<dyn Array>> {
+fn array(batches: &Vec<&RecordBatch>, ctype: Arc<Field>) -> Vec<Arc<dyn Array>> {
     let arr = batches
-                .iter()
-                .map(|batch| {
-                    let arr3 = if let Some(index) = batch.schema().fields().iter().position(|f| f == &ctype) {
-                        let arr1 = batch.column(index).to_owned();
-                        arr1
-                    } else {
-                        let arr2 = build_null_array(&ctype,batch.num_rows());
-                        arr2
-                    };
-                    arr3
-                })
-                .collect::<Vec<_>>();
+        .iter()
+        .map(|batch| {
+            let arr3 = if let Some(index) = batch.schema().fields().iter().position(|f| f == &ctype)
+            {
+                let arr1 = batch.column(index).to_owned();
+                arr1
+            } else {
+                let arr2 = build_null_array(&ctype, batch.num_rows());
+                arr2
+            };
+            arr3
+        })
+        .collect::<Vec<_>>();
     arr
 }
 
 /**
- * 构建一个长度为length的空数组 
+ * 构建一个长度为length的空数组
  */
-pub fn build_null_array(ctype: &Arc<Field>, length: usize)-> Arc<dyn Array>{
+pub fn build_null_array(ctype: &Arc<Field>, length: usize) -> Arc<dyn Array> {
     let data_type = ctype.data_type();
     let array_data = ArrayData::new_null(data_type, length);
     let array = make_array(array_data);
@@ -88,7 +91,7 @@ pub fn build_null_array(ctype: &Arc<Field>, length: usize)-> Arc<dyn Array>{
 /**
  * 合并两个schema
  */
-pub fn merge_schema(s1: &Schema,s2: &Schema) -> Schema {
+pub fn merge_schema(s1: &Schema, s2: &Schema) -> Schema {
     let schema1 = s1.fields().to_vec();
     let schema2 = s2.fields().to_vec();
     let mut combined_set: HashSet<_> = schema1.into_iter().collect();
@@ -97,9 +100,9 @@ pub fn merge_schema(s1: &Schema,s2: &Schema) -> Schema {
     Schema::new(combined_schema)
 }
 
-pub fn merge_schemas(schemas: impl IntoIterator<Item = SchemaRef>) -> Result<Schema>{
+pub fn merge_schemas(schemas: impl IntoIterator<Item = SchemaRef>) -> Result<Schema> {
     let mut hash_set = HashSet::new();
-    schemas.into_iter().for_each(|schema|{
+    schemas.into_iter().for_each(|schema| {
         let vecs: HashSet<_> = schema.fields().to_vec().into_iter().collect();
         hash_set.extend(vecs);
     });

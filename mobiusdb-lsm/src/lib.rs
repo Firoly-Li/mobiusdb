@@ -1,27 +1,23 @@
-use std::default;
 
 use anyhow::Result;
 use arrow::array::RecordBatch;
 use arrow_flight::{utils::flight_data_to_batches, FlightData};
 
-use memtable::MemTable;
+use lsm_client::LsmClient;
+use memtable::{table_name::TableName, MemTable};
 use tokio::sync::{
-    mpsc::{self, Receiver, Sender},
+    mpsc::{self, Receiver},
     oneshot,
 };
 use wal::{offset::Offset, Append, WalService};
 
+pub mod lsm_client;
 pub mod memtable;
 mod sstable;
 mod utils;
 pub mod wal;
 
-
 pub const TABLE_NAME: &str = "table";
-
-
-
-
 
 #[derive(Debug)]
 pub enum LsmCommand {
@@ -32,7 +28,7 @@ pub enum LsmCommand {
     // 查询语句
     Query((String, oneshot::Sender<Option<RecordBatch>>)),
     // 查询表列表
-    TableList(oneshot::Sender<Option<Vec<String>>>),
+    TableList(oneshot::Sender<Option<Vec<TableName>>>),
 }
 
 impl LsmCommand {
@@ -56,7 +52,7 @@ impl LsmCommand {
         (LsmCommand::Query((query, sendre)), receiver)
     }
 
-    pub fn create_tables() -> (Self, oneshot::Receiver<Option<Vec<String>>>) {
+    pub fn created_tables() -> (Self, oneshot::Receiver<Option<Vec<TableName>>>) {
         let (sendre, receiver) = oneshot::channel();
         (LsmCommand::TableList(sendre), receiver)
     }
@@ -77,7 +73,7 @@ impl LsmServer {
                         let mut resp = false;
                         if let true = self.wal_service.append(fds.clone()).await {
                             if let Ok(batches) = flight_data_to_batches(&fds) {
-                                let _ = self.memtable.batch_insert(batches).await; 
+                                let _ = self.memtable.batch_insert(batches).await;
                                 resp = true;
                             }
                         }
@@ -91,32 +87,33 @@ impl LsmServer {
                             None => Vec::new(),
                         };
                         let _ = response.send(resp);
-                    },
+                    }
                     LsmCommand::Table((file_name, response)) => {
                         let tables = self.memtable.tables().await;
                         println!("查询表: {:?}", tables);
-                        if let Ok(table) = self.memtable.query_with_table(file_name.as_str()).await {
+                        if let Ok(table) = self.memtable.query_with_table(file_name.as_str()).await
+                        {
                             let resp_table = table.first().unwrap().clone();
                             let _ = response.send(Some(resp_table));
-                        }else {
+                        } else {
                             let _ = response.send(None);
                         }
-                    },
+                    }
                     LsmCommand::Query((query, response)) => {
                         if let Ok(table) = self.memtable.query(query.as_str()).await {
                             let resp_table = table.first().unwrap().clone();
                             let _ = response.send(Some(resp_table));
-                        }else {
+                        } else {
                             let _ = response.send(None);
                         }
-                    },
+                    }
                     LsmCommand::TableList(response) => {
                         if let Ok(table) = self.memtable.tables().await {
                             let _ = response.send(Some(table));
-                        }else {
+                        } else {
                             let _ = response.send(None);
                         }
-                    },
+                    }
                     _ => (),
                 }
             }
@@ -127,18 +124,18 @@ impl LsmServer {
 /**
  * 构建一个 LSM 存储服务
  */
-pub async fn server(path: impl Into<String>, wal_size: usize) -> Result<Sender<LsmCommand>> {
+pub async fn server(path: impl Into<String>, wal_size: usize) -> Result<LsmClient> {
     let (sender, receiver) = mpsc::channel(1024);
     let wal_service = WalService::init(path, wal_size).await;
     match wal_service {
         Ok(service) => {
             let server = LsmServer {
                 wal_service: service,
-                memtable: MemTable::new(),// 这里可能会有问题，因为内存表是空的 
+                memtable: MemTable::new(), // 这里可能会有问题，因为内存表是空的
                 receiver,
             };
             tokio::spawn(async move { server.run().await });
-            Ok(sender)
+            Ok(LsmClient::new(sender))
         }
         Err(e) => Err(e.into()),
     }

@@ -95,17 +95,21 @@ impl Decoder for Vec<WalMsg> {
     type Error = anyhow::Error;
 
     fn decode(mut bytes: Bytes) -> anyhow::Result<Self, Self::Error> {
-        println!("start decode bytes len = {}",bytes.len());
+        println!("start decode bytes len = {}", bytes.len());
         let mut wal_msgs = Vec::new();
         while bytes.len() > 4 {
             let wal_msg_len = bytes.get_u32();
-            println!("本次循环：wal_msg_len = {}，bytes len = {}",wal_msg_len,bytes.len());
+            println!(
+                "本次循环：wal_msg_len = {}，bytes len = {}",
+                wal_msg_len,
+                bytes.len()
+            );
             if bytes.len() < wal_msg_len as usize {
-                println!("bytes len = {},wal_msg_len = {}",bytes.len(),wal_msg_len);
+                println!("bytes len = {},wal_msg_len = {}", bytes.len(), wal_msg_len);
                 return Err(anyhow::Error::msg("1234"));
             }
             let buf = bytes.split_to(wal_msg_len as usize);
-            println!("after split off bytes len = {}",bytes.len());
+            println!("after split off bytes len = {}", bytes.len());
             let wal_msg = WalMsg::decode(buf);
             wal_msgs.push(wal_msg);
         }
@@ -208,15 +212,13 @@ mod tests {
         batch
     }
 
-
-
     pub fn create_bytes_from_walmsgs(num: usize) -> Bytes {
         let mut resp = BytesMut::new();
         let b = Bytes::from("hello world !");
         for i in 0..num {
-           let wal_msg =  WalMsg {
+            let wal_msg = WalMsg {
                 num: i as u16,
-                indexs: vec![45;i],
+                indexs: vec![45; i],
                 bytes: b.clone(),
             };
             let mut buf = BytesMut::new();

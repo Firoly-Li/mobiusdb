@@ -1,7 +1,6 @@
 use super::offset::Offset;
 use anyhow::{Ok, Result};
 use bytes::{Buf, BufMut, Bytes, BytesMut};
-use prost::Message;
 
 pub trait Encoder: Sync + Send + 'static {
     type Error;

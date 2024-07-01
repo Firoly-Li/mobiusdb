@@ -16,7 +16,12 @@ use crate::{
     wal::wal_msg::WalMsg,
 };
 
-use super::{offset::Offset, serialization::Decoder, wal_msg::{walmsgs_to_offsets, IntoWalMsg}, Append};
+use super::{
+    offset::Offset,
+    serialization::Decoder,
+    wal_msg::{walmsgs_to_offsets, IntoWalMsg},
+    Append,
+};
 
 // 默认wal文件大小: 1G
 const MAX_SIZE: usize = 1024 * 1024 * 1024;
@@ -86,7 +91,8 @@ impl ActiveWal {
                 wal: Arc::new(Mutex::new(file)),
                 max_size: MAX_SIZE,
                 size: position,
-            },offsets
+            },
+            offsets,
         ))
     }
 
@@ -189,7 +195,7 @@ impl ActiveWal {
         let mut index = Offset::from((self.size + 4) as usize);
         let v_len = bytes.len() as u32;
         let mut new_bytes = BytesMut::new();
-        new_bytes.put_u32(v_len);// 写入数据长度
+        new_bytes.put_u32(v_len); // 写入数据长度
         new_bytes.put(bytes); // 写入数据
         file.write_all(&new_bytes).await.expect("Failed to write");
         index.update((v_len) as usize);
@@ -297,25 +303,6 @@ mod tests {
     }
 
     /**
-     * 测试ActiveWal的读
-     */
-    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn read_test() -> Result<()> {
-        let active_wal =
-            ActiveWal::open("/Users/firoly/Documents/code/rust/mobiusdb/mobiusdb-lsm/tmp/test.wal")
-                .await?;
-        let wal_msg = active_wal.read_with_offset(0).await?;
-        let resp = wal_msg_to_batch(wal_msg).unwrap();
-        let index = Offset {
-            offset: 4,
-            len: 2051,
-        };
-        let wal_msg = active_wal.read_with_index(index).await.unwrap();
-        let resp1 = wal_msg_to_batch(wal_msg).unwrap();
-        Ok(())
-    }
-
-    /**
      * 测试ActiveWal的写入不同的数据
      */
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -346,15 +333,12 @@ mod tests {
         Ok(())
     }
 
-
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn file_load_test(){
+    async fn file_load_test() {
         let file_path = "/Users/firoly/Documents/code/rust/mobiusdb/mobiusdb-lsm/tmp/test2.wal";
-        let (wal,offsets) = ActiveWal::load(file_path).await.unwrap();
-        println!("offsets = {:?}",offsets);
+        let (wal, offsets) = ActiveWal::load(file_path).await.unwrap();
+        println!("offsets = {:?}", offsets);
     }
-
-
 
     fn create_data(n: impl Into<String>) -> Vec<FlightData> {
         let batch = create_short_batch(n);

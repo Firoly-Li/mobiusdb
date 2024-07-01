@@ -49,11 +49,11 @@ impl WalService {
                     if let Ok(mut files_name) = get_files_name(path.as_str()).await {
                         files_name.sort();
                         let file_name = files_name.last().unwrap();
-                        let file_path = path.clone() + "/"+file_name;
-                        let a: Vec<&str> = file_name.split(".").collect();
+                        let file_path = path.clone() + "/" + file_name;
+                        let _a: Vec<&str> = file_name.split(".").collect();
                         // print!("file_path = {}",file_path);
                         // 1、加载wal文件
-                        let (wal,offsets) = ActiveWal::load(file_path.as_str()).await.unwrap();
+                        let (wal, offsets) = ActiveWal::load(file_path.as_str()).await.unwrap();
                         // println!("offsets = {:?}",offsets);
 
                         // 3、创建
