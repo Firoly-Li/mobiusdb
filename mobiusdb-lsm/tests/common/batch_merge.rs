@@ -1,8 +1,9 @@
-use std::{collections::HashSet, sync::Arc};
-use arrow::{array::{Array, ArrayRef, RecordBatch, StringArray, StructArray}, datatypes::{DataType, Field, Schema}};
 use anyhow::Result;
-
-
+use arrow::{
+    array::{Array, ArrayRef, RecordBatch, StringArray, StructArray},
+    datatypes::{DataType, Field, Schema},
+};
+use std::{collections::HashSet, sync::Arc};
 
 /**
  * 结构完全相同的两个RecordBatch合并
@@ -21,7 +22,7 @@ pub fn merge_full_batch(batch1: RecordBatch, batch2: RecordBatch) -> Result<Reco
     Ok(batch)
 }
 
-fn merge_schema(s1: &Schema,s2: &Schema) -> Schema {
+fn merge_schema(s1: &Schema, s2: &Schema) -> Schema {
     if s1 == s2 {
         return s1.clone();
     }
@@ -32,8 +33,6 @@ fn merge_schema(s1: &Schema,s2: &Schema) -> Schema {
     let combined_schema: Vec<Arc<Field>> = combined_set.into_iter().collect();
     Schema::new(combined_schema)
 }
-
-
 
 fn merge_arrays(array1: &ArrayRef, array2: &ArrayRef) -> Result<ArrayRef> {
     match (array1.data_type(), array2.data_type()) {
@@ -46,7 +45,7 @@ fn merge_arrays(array1: &ArrayRef, array2: &ArrayRef) -> Result<ArrayRef> {
         // 其他数据类型的合并逻辑
         _ => Err(arrow::error::ArrowError::InvalidArgumentError(
             "Unsupported data type for merging arrays.".to_string(),
-        ).into()),
+        )
+        .into()),
     }
 }
-

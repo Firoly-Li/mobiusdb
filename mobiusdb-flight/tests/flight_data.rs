@@ -153,7 +153,7 @@ fn read_flight_data_with_path(path: &str, index: &Index) -> Vec<FlightData> {
     file.read_exact(&mut buf).expect("Failed to read");
     let mut buf_mut = BytesMut::from(buf.as_slice());
     for offset in index.indexs.clone() {
-        println!("offset: {}", offset);
+        // println!("offset: {}", offset);
         let mut s = buf_mut.split_to(offset);
         let fd = FlightData::decode(&mut s).unwrap();
         resp.push(fd);

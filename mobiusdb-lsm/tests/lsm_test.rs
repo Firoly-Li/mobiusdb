@@ -5,119 +5,182 @@ pub mod common {
 use std::time::Duration;
 
 use arrow::array::RecordBatch;
-use arrow_flight::utils::batches_to_flight_data;
-use common::data_utils::{create_data, create_diff_data, create_student_batch1, create_students, create_teacher};
-use mobiusdb_lsm::{server, LsmCommand};
+use arrow_flight::utils::{batches_to_flight_data, flight_data_to_batches};
+use common::data_utils::{create_batch_with_opts, create_data, create_diff_data, create_students};
+use datafusion::{dataframe::DataFrameWriteOptions, prelude::SessionContext};
+use mobiusdb_lsm::{memtable::table_size::batch_size, server};
 use tokio::time::sleep;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn server_append_should_be_work() {
     let path = "/Users/firoly/Documents/code/rust/mobiusdb/mobiusdb-lsm/tmp/";
     let wal_size = 1024 * 1024;
-    let sender = server(path, wal_size).await.unwrap();
+    let client = server(path, wal_size).await.unwrap();
 
-    for i in 0..1500 {
+    for i in 0..5 {
         let fds = if i % 2 == 0 {
             create_data("test".to_string() + &i.to_string())
         } else {
             create_diff_data(i)
         };
-        let (cmd, response) = LsmCommand::create_append(fds);
-        let _ = sender.send(cmd).await;
-        let resp = response.await.unwrap();
-        // println!("append: {:?}",resp);
+        let resp = client.append_fds(fds).await;
+        println!("append: {:?}", resp);
         sleep(Duration::from_millis(2)).await;
     }
 }
 
-fn create_group_student(n: usize,class_name: &str) -> RecordBatch {
-    let names = vec!["A".to_string(),"B".to_string(),"C".to_string(),"D".to_string(),"E".to_string()];
-    let ages = vec![n as i32,11,12,13,14];
-    let address = vec!["BeiJing".to_string(),"ShangHai".to_string(),"ChengDu".to_string(),"GuangZhou".to_string(),"ChongQing".to_string()];
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn table_size_test() {
+    let path = "/Users/firoly/Documents/code/rust/mobiusdb/mobiusdb-lsm/tmp/";
+    let wal_size = 1024 * 1024;
+    let client = server(path, wal_size).await.unwrap();
+    for _i in 0..5 {
+        let fds = create_data("test");
+        let resp = client.append_fds(fds).await;
+        println!("append: {:?}", resp);
+        sleep(Duration::from_millis(2)).await;
+    }
+}
+
+#[test]
+fn batch_size_test() {
+    // let batch = create_data("test");
+    // println!("batch: {:?}", batch[0].data_header.len() + batch[0].data_body.len());
+    // let batch1 = flight_data_to_batches(&batch).unwrap();
+    // println!("batch: {:?}", batch_size(&batch1[0]));
+
+    let batch = create_batch_with_opts(2000, "table_name");
+    let schema = batch.schema();
+    println!("batch: {:?} kb",(batch_size(&batch))/1000);
+    let mut vs = Vec::new();
+    vs.push(batch);
+    let batch1 = batches_to_flight_data(&schema,vs).unwrap();
+    println!("fd: {:?} kb", (batch1[0].data_header.len() + batch1[0].data_body.len())/1000);
+}
+
+
+/**
+ * 
+ */
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn batch_size_test1() {
+    let batch = create_batch_with_opts(2000, "table_name");
+    println!("batch: {:?} kb",(batch_size(&batch))/1000);
+    let ctx = SessionContext::new();
+    // let df = ctx.read_batch(batch).unwrap();
+    // let _ = df.write_parquet("/Users/firoly/Documents/code/rust/mobiusdb/mobiusdb-lsm/tmp/batch_size.parquet", DataFrameWriteOptions::new(), None).await;
+}
+
+
+fn create_group_student(n: usize, class_name: &str) -> RecordBatch {
+    let names = vec![
+        "A".to_string(),
+        "B".to_string(),
+        "C".to_string(),
+        "D".to_string(),
+        "E".to_string(),
+    ];
+    let ages = vec![n as i32, 11, 12, 13, 14];
+    let address = vec![
+        "BeiJing".to_string(),
+        "ShangHai".to_string(),
+        "ChengDu".to_string(),
+        "GuangZhou".to_string(),
+        "ChongQing".to_string(),
+    ];
     let resp = create_students(class_name, names, ages, address);
     resp
 }
 
-
 fn create_group1_student() -> RecordBatch {
-    let names = vec!["A".to_string(),"B".to_string(),"C".to_string(),"D".to_string(),"E".to_string()];
-    let ages = vec![10,11,12,13,14];
-    let address = vec!["BeiJing".to_string(),"ShangHai".to_string(),"ChengDu".to_string(),"GuangZhou".to_string(),"ChongQing".to_string()];
+    let names = vec![
+        "A".to_string(),
+        "B".to_string(),
+        "C".to_string(),
+        "D".to_string(),
+        "E".to_string(),
+    ];
+    let ages = vec![10, 11, 12, 13, 14];
+    let address = vec![
+        "BeiJing".to_string(),
+        "ShangHai".to_string(),
+        "ChengDu".to_string(),
+        "GuangZhou".to_string(),
+        "ChongQing".to_string(),
+    ];
     let resp = create_students("三年级二班", names, ages, address);
     resp
 }
 fn create_group2_student() -> RecordBatch {
-    let names = vec!["F".to_string(),"G".to_string(),"H".to_string()];
-    let ages = vec![10,11,12];
-    let address = vec!["BeiJing".to_string(),"ShangHai".to_string(),"ChengDu".to_string()];
+    let names = vec!["F".to_string(), "G".to_string(), "H".to_string()];
+    let ages = vec![10, 11, 12];
+    let address = vec![
+        "BeiJing".to_string(),
+        "ShangHai".to_string(),
+        "ChengDu".to_string(),
+    ];
     let resp = create_students("三年级二班", names, ages, address);
     resp
 }
-
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn lsm_query_should_be_work() {
     let path = "/Users/firoly/Documents/code/rust/mobiusdb/mobiusdb-lsm/tmp/";
     let wal_size = 1024 * 1024;
-    let sender = server(path, wal_size).await.unwrap();
+    let client = server(path, wal_size).await.unwrap();
     for i in 0..5 {
         let class_name = if i % 2 == 0 {
-            format!("name_{}",i)
-        }else {
-            format!("name_{}0",i)
+            format!("name_{}", i)
+        } else {
+            format!("name_{}0", i)
         };
-        println!("cname: {:?}",class_name);
+        println!("cname: {:?}", class_name);
         let batch = create_group_student(i, class_name.as_str());
-        let schema = batch.schema();
-        println!("schema: {:?}",schema);
-        let fds = batches_to_flight_data(&schema,vec![batch]).unwrap();
-        let (cmd, response) = LsmCommand::create_append(fds);
-        let _ = sender.send(cmd).await;
-        let resp = response.await.unwrap();
-        println!("append: {:?}",resp);
+        let resp = client.append_batch(batch).await;
+        println!("append: {:?}", resp);
     }
-
-    let (cmd,receiver) = LsmCommand::create_tables();
-    let _ = sender.send(cmd).await;
-    let resp = receiver.await.unwrap();
-    println!("tables: {:?}",resp);
-    let (cmd,receiver) = LsmCommand::create_table("name_10".to_string());
-    let _ = sender.send(cmd).await;
-    let resp = receiver.await.unwrap();
-    println!("table: {:?}",resp);
+    let resp = client.table_list().await;
+    println!("table_list: {:?}", resp);
+    let table = client.table("name_10").await;
+    println!("table: {:?}", table);
 }
-
-
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn lsm_query_sql_should_be_work() {
     let path = "/Users/firoly/Documents/code/rust/mobiusdb/mobiusdb-lsm/tmp/";
     let wal_size = 1024 * 1024;
-    let sender = server(path, wal_size).await.unwrap();
+    let client = server(path, wal_size).await.unwrap();
     for i in 0..5 {
         let class_name = if i % 2 == 0 {
-            format!("name_{}",i)
-        }else {
-            format!("name_{}0",i)
+            format!("name_{}", i)
+        } else {
+            format!("name_{}0", i)
         };
-        println!("cname: {:?}",class_name);
+        println!("cname: {:?}", class_name);
         let batch = create_group_student(i, class_name.as_str());
         let schema = batch.schema();
-        println!("schema: {:?}",schema);
-        let fds = batches_to_flight_data(&schema,vec![batch]).unwrap();
-        let (cmd, response) = LsmCommand::create_append(fds);
-        let _ = sender.send(cmd).await;
-        let resp = response.await.unwrap();
-        println!("append: {:?}",resp);
+        println!("schema: {:?}", schema);
+        let fds = batches_to_flight_data(&schema, vec![batch]).unwrap();
+        let resp = client.append_fds(fds).await;
+        println!("resp: {:?}", resp);
     }
 
     let sql = format!("select * from name_10 where age > 12");
-    let (cmd,receiver) = LsmCommand::create_query(sql);
-    let _ = sender.send(cmd).await;
-    let resp = receiver.await.unwrap();
-    println!("tables: {:?}",resp);
-    // let (cmd,receiver) = LsmCommand::create_table("name_10".to_string());
-    // let _ = sender.send(cmd).await;
-    // let resp = receiver.await.unwrap();
-    // println!("table: {:?}",resp);
+    let resp = client.query(sql.as_str()).await;
+    println!("tables: {:?}", resp);
+}
+
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn data_size_test() {
+    let path = "/Users/firoly/Documents/code/rust/mobiusdb/mobiusdb-lsm/tmp/";
+    let wal_size = 1024 * 1024;
+    let client = server(path, wal_size).await.unwrap();
+
+    let batch = create_group1_student();
+    let schema = batch.schema();
+    println!("schema: {:?}", schema);
+    let fds = batches_to_flight_data(&schema, vec![batch]).unwrap();
+    let resp = client.append_fds(fds).await;
+    println!("resp: {:?}", resp);
 }
