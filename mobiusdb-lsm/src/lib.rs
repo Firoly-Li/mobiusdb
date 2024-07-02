@@ -1,20 +1,21 @@
-
 use anyhow::Result;
 use arrow::array::RecordBatch;
 use arrow_flight::{utils::flight_data_to_batches, FlightData};
 
 use lsm_client::LsmClient;
-use memtable::{table_name::TableName, MemTable};
+
+use memtable::MemTableService;
 use tokio::sync::{
     mpsc::{self, Receiver},
     oneshot,
 };
+use utils::table_name::TableName;
 use wal::{offset::Offset, Append, WalService};
 
 pub mod lsm_client;
 pub mod memtable;
-mod sstable;
-mod utils;
+pub mod sstable;
+pub mod utils;
 pub mod wal;
 
 pub const TABLE_NAME: &str = "table";
@@ -60,7 +61,7 @@ impl LsmCommand {
 
 pub struct LsmServer {
     wal_service: WalService,
-    memtable: MemTable,
+    memtable: MemTableService,
     receiver: Receiver<LsmCommand>,
 }
 
@@ -131,7 +132,7 @@ pub async fn server(path: impl Into<String>, wal_size: usize) -> Result<LsmClien
         Ok(service) => {
             let server = LsmServer {
                 wal_service: service,
-                memtable: MemTable::new(), // 这里可能会有问题，因为内存表是空的
+                memtable: MemTableService::new(), // 这里可能会有问题，因为内存表是空的
                 receiver,
             };
             tokio::spawn(async move { server.run().await });

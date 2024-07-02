@@ -105,6 +105,8 @@ mobius-lsm模块是mobiusdb的持久层，通过LSM树实现了数据的高效�
 
 #### MemTable
 
+![memtable_service](/Users/firoly/Documents/code/rust/mobiusdb/reademe_imgs/memtable_service.png)
+
 - [ ] MemTable的结构设计
 
 #### SSTable

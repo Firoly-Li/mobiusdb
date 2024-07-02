@@ -51,26 +51,27 @@ fn batch_size_test() {
 
     let batch = create_batch_with_opts(2000, "table_name");
     let schema = batch.schema();
-    println!("batch: {:?} kb",(batch_size(&batch))/1000);
+    println!("batch: {:?} kb", (batch_size(&batch)) / 1000);
     let mut vs = Vec::new();
     vs.push(batch);
-    let batch1 = batches_to_flight_data(&schema,vs).unwrap();
-    println!("fd: {:?} kb", (batch1[0].data_header.len() + batch1[0].data_body.len())/1000);
+    let batch1 = batches_to_flight_data(&schema, vs).unwrap();
+    println!(
+        "fd: {:?} kb",
+        (batch1[0].data_header.len() + batch1[0].data_body.len()) / 1000
+    );
 }
 
-
 /**
- * 
+ *
  */
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn batch_size_test1() {
     let batch = create_batch_with_opts(2000, "table_name");
-    println!("batch: {:?} kb",(batch_size(&batch))/1000);
+    println!("batch: {:?} kb", (batch_size(&batch)) / 1000);
     let ctx = SessionContext::new();
     // let df = ctx.read_batch(batch).unwrap();
     // let _ = df.write_parquet("/Users/firoly/Documents/code/rust/mobiusdb/mobiusdb-lsm/tmp/batch_size.parquet", DataFrameWriteOptions::new(), None).await;
 }
-
 
 fn create_group_student(n: usize, class_name: &str) -> RecordBatch {
     let names = vec![
@@ -169,7 +170,6 @@ async fn lsm_query_sql_should_be_work() {
     let resp = client.query(sql.as_str()).await;
     println!("tables: {:?}", resp);
 }
-
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn data_size_test() {

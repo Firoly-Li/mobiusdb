@@ -3,7 +3,10 @@ use arrow::array::RecordBatch;
 use arrow_flight::FlightData;
 use tokio::sync::{mpsc::Sender, oneshot};
 
-use crate::{memtable::table_name::TableName, utils::data_utils::batch_to_flight_data, LsmCommand};
+use crate::{
+    utils::{data_utils::batch_to_flight_data, table_name::TableName},
+    LsmCommand,
+};
 
 #[derive(Debug, Clone)]
 pub struct LsmClient {
