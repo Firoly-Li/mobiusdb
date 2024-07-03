@@ -90,7 +90,7 @@ mobius-flight模块是mobiusdb的网络层，主要用于处理网络服务，�
 
 mobius-lsm模块是mobiusdb的持久层，通过LSM树实现了数据的高效落盘。
 
-![LSM tree](/Users/firoly/Documents/code/rust/mobiusdb/reademe_imgs/LSMtree.jpg)
+![LSM tree](./reademe_imgs/LSMtree.jpg)
 
 #### *LsmCommand*
 
@@ -150,7 +150,7 @@ LSM本身内部是高度聚合的，对外只提供了一系列接口，细节�
 
 #### MemTable
 
-![memtable_service](/Users/firoly/Documents/code/rust/mobiusdb/reademe_imgs/memtable_service.png)
+![memtable_service](./reademe_imgs/memtable_service.png)
 
 1、mutables中存储的memtable不一定都是mutable，也有可能是immutable。在新数据写入后，immutable会转移到immtables中。
 
