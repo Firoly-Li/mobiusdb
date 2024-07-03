@@ -205,7 +205,7 @@ mod tests {
     #[test]
     fn open_file_test() {
         let path = "/Users/firoly/Documents/code/rust/mobiusdb/mobiusdb-lsm/tmp/test.wal";
-        let path = open_file(path);
+        let _path = open_file(path);
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]

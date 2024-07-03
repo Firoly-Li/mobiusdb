@@ -33,27 +33,27 @@ pub enum LsmCommand {
 }
 
 impl LsmCommand {
-    pub fn create_append(fds: Vec<FlightData>) -> (Self, oneshot::Receiver<bool>) {
+    pub fn create_append_cmd(fds: Vec<FlightData>) -> (Self, oneshot::Receiver<bool>) {
         let (sendre, receiver) = oneshot::channel();
         (LsmCommand::Append((fds, sendre)), receiver)
     }
 
-    pub fn create_offset_list(file_name: String) -> (Self, oneshot::Receiver<Vec<Offset>>) {
+    pub fn create_offset_list_cmd(file_name: String) -> (Self, oneshot::Receiver<Vec<Offset>>) {
         let (sendre, receiver) = oneshot::channel();
         (LsmCommand::OffsetList((file_name, sendre)), receiver)
     }
 
-    pub fn create_table(file_name: String) -> (Self, oneshot::Receiver<Option<RecordBatch>>) {
+    pub fn create_table_cmd(file_name: String) -> (Self, oneshot::Receiver<Option<RecordBatch>>) {
         let (sendre, receiver) = oneshot::channel();
         (LsmCommand::Table((file_name, sendre)), receiver)
     }
 
-    pub fn create_query(query: String) -> (Self, oneshot::Receiver<Option<RecordBatch>>) {
+    pub fn create_query_cmd(query: String) -> (Self, oneshot::Receiver<Option<RecordBatch>>) {
         let (sendre, receiver) = oneshot::channel();
         (LsmCommand::Query((query, sendre)), receiver)
     }
 
-    pub fn created_tables() -> (Self, oneshot::Receiver<Option<Vec<TableName>>>) {
+    pub fn created_tables_cmd() -> (Self, oneshot::Receiver<Option<Vec<TableName>>>) {
         let (sendre, receiver) = oneshot::channel();
         (LsmCommand::TableList(sendre), receiver)
     }
@@ -71,6 +71,8 @@ impl LsmServer {
             if let Some(cmd) = self.receiver.recv().await {
                 match cmd {
                     LsmCommand::Append((fds, response)) => {
+                        // 1、数据写入到 WAL
+                        // 2、数据写入到 MemTable
                         let mut resp = false;
                         if let true = self.wal_service.append(fds.clone()).await {
                             if let Ok(batches) = flight_data_to_batches(&fds) {

@@ -7,7 +7,7 @@ use arrow_flight::{
     utils::{batches_to_flight_data, flight_data_to_batches},
     FlightData,
 };
-use mobiusdb_lsm::{wal::wal_msg::WalMsg, TABLE_NAME};
+use mobiusdb_lsm::{utils::time_utils::now, wal::wal_msg::WalMsg, TABLE_NAME};
 use prost::Message;
 use std::{collections::HashMap, sync::Arc};
 
@@ -238,6 +238,43 @@ pub fn create_teacher_batch2() -> RecordBatch {
                 "Computer".to_string(),
                 "language".to_string(),
                 "Music".to_string(),
+            ])),
+        ],
+    )
+    .unwrap();
+    batch
+}
+
+pub fn create_teacher_batch2_with_times(table_name: impl AsRef<str>,age: i32) -> RecordBatch {
+    let schema = Arc::new(Schema::new(vec![
+        Field::new("name", DataType::Utf8, true),
+        Field::new("age", DataType::Int32, true),
+        Field::new("teach", DataType::Utf8, true),
+        Field::new("timestamp", DataType::UInt64, true),
+    ]).with_metadata({
+        let mut map = HashMap::new();
+        map.insert(TABLE_NAME.to_string(), table_name.as_ref().to_string());
+        map
+    }));
+
+    let batch = RecordBatch::try_new(
+        schema.clone(),
+        vec![
+            Arc::new(StringArray::from(vec![
+                "James".to_string(),
+                "Michael".to_string(),
+                "David".to_string(),
+            ])),
+            Arc::new(Int32Array::from(vec![age, 19, 20])),
+            Arc::new(StringArray::from(vec![
+                "Computer".to_string(),
+                "language".to_string(),
+                "Music".to_string(),
+            ])),
+            Arc::new(UInt64Array::from(vec![
+                now() as u64,
+                (now() + 5) as u64,
+                (now() + 7) as u64,
             ])),
         ],
     )

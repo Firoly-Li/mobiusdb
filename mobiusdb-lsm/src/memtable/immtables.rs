@@ -17,9 +17,27 @@ pub struct Immutables {
 }
 
 impl Immutables {
-    pub fn insert(&self, memtable: MemTable) {
+    pub fn insert(&self, memtable: MemTable) -> bool {
+        let mem_table_name = memtable.name();
         let prefix = memtable.name.get_prefix_name();
-        self.tables.get_mut(prefix.as_str()).unwrap().push(memtable)
+
+        match self.tables_name.get_mut(prefix.as_str()) {
+            Some(mut vs) => vs.push(mem_table_name.clone()),
+            None => {
+                let mut vs = Vec::new();
+                vs.push(mem_table_name.clone());
+                self.tables_name.insert(prefix.clone(), vs);
+            },   
+        }
+        match self.tables.get_mut(prefix.as_str()) {
+            Some(mut vs) => vs.push(memtable),
+            None => {
+                let mut vs = Vec::new();
+                vs.push(memtable);
+                self.tables.insert(prefix, vs);
+            },   
+        }
+        true
     }
 
     /**
@@ -42,6 +60,16 @@ impl Immutables {
                 }
             }
             false => Ok(true),
+        }
+    }
+}
+
+impl Immutables {
+    pub fn get_tables(&self,prefix: &str) -> Vec<TableName> {
+        let tables = self.tables_name.get(prefix);
+        match tables {
+            Some(ts) => ts.clone(),
+            None => Vec::new(),
         }
     }
 }

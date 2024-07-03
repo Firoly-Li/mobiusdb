@@ -1,31 +1,31 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use array_data_utils::{merge_batches_with_schema, merge_schema};
+use array_data_utils::{merge_batches, merge_batches_with_schema, merge_schema};
 use arrow::{array::RecordBatch, datatypes::Schema};
 use dashmap::{DashMap, DashSet};
 use datafusion::{
     dataframe::DataFrameWriteOptions, error::DataFusionError, prelude::SessionContext,
     sql::TableReference,
 };
-use immtables::Immutables;
 use memory::MemTable;
-use table_size::{batch_size, TableSize};
+use table_index::TableIndexs;
+use table_size::TableSize;
 
 use crate::{
     utils::{
-        file_utils::{create_sstable_path, Level, SSTABLE_FILE_SUFFIX},
-        table_name::TableName,
+        data_utils, file_utils::{create_sstable_path, Level, SSTABLE_FILE_SUFFIX}, table_name::TableName
     },
     TABLE_NAME,
 };
 
 pub mod array_data_utils;
 pub mod immtables;
-pub mod sql_utils;
-
 pub mod memory;
+pub mod mutables;
+pub mod sql_utils;
 pub mod table_size;
+pub mod table_index;
 
 #[derive(Clone)]
 pub struct MemTableService {
@@ -33,9 +33,10 @@ pub struct MemTableService {
     table_names: DashSet<TableName>,
     table_size: TableSize, // 每100行合并一次
     table_opts: DashMap<TableName, Arc<Schema>>,
-    mutables: DashMap<TableName, MemTable>,
-    immutables: Immutables,
+    table_indexs: TableIndexs,
 }
+
+impl MemTableService {}
 
 impl MemTableService {
     pub fn new() -> Self {
@@ -44,18 +45,16 @@ impl MemTableService {
             table_names: DashSet::new(),
             table_size: TableSize::default(),
             table_opts: DashMap::new(),
-            mutables: DashMap::new(),
-            immutables: Immutables::default(),
+            table_indexs: TableIndexs::new(),
         }
     }
 
     pub async fn batch_insert(&mut self, batches: Vec<RecordBatch>) {
+        println!("batchs_len = {:?}", batches.len());
         for batch in batches {
-            let _resp = self.insert(batch).await;
+            let _resp = self.insert_batch(&batch).await;
         }
     }
-
-    pub async fn insert_batch(&mut self, batch: &RecordBatch) {}
 
     /**
      * todo:
@@ -64,9 +63,68 @@ impl MemTableService {
      *  3、将数据合并到mutableTable
      *  4、判断合并之后的mutabletable的大小，如果过大就转换为immutable_table
      */
+    pub async fn insert_batch(&mut self, batch: &RecordBatch) -> Result<bool> {
+        // 1、首先生成相应的table_name
+        if let Some(prefix) = batch.schema().metadata().get(TABLE_NAME) {
+            let b = self.table_indexs.get_mutables().contains_key(prefix);
+            
+            println!("prefix:{:?} 是否存在于mutables: {:?}",prefix, b);
+            let new_batch = match b {
+                true => {
+                    let mem_table = self.table_indexs.get_mutables().get_table(prefix).unwrap();
+                    if mem_table.mutable {
+                        let table_name = self.table_indexs.get_mutables().get_table_name(prefix).unwrap();
+                        let old_mem_table_name = table_name.get_memtable_name();
+                        // println!("old_mem_table_name: {:?}", old_mem_table_name);
+                        let mut old_batch = self
+                            .query_with_table(&old_mem_table_name)
+                            .await?;
+                        // println!("old_batch: {:?}", old_batch);
+                        // println!("old_batch_len: {:?}", old_batch.len());
+                        // println!("old_batch_num_rows: {:?}", old_batch.first().unwrap().num_rows());
+                        old_batch.push(batch.clone());
+                        let new_batch = merge_batches(&old_batch)?;
+                        new_batch
+                    }else {
+                        let schema = batch.schema();
+                        let empty_batch = RecordBatch::new_empty(schema);
+                        let new_batch = merge_batches(vec![batch,&empty_batch])?;
+                        new_batch
+                    }
+                    
+                }
+                false => {
+                    let schema = batch.schema();
+                    let empty_batch = RecordBatch::new_empty(schema);
+                    let new_batch = merge_batches(vec![batch,&empty_batch])?;
+                    new_batch
+                }
+            };
+            // println!("new_batch: {:?}", new_batch);
+            // println!("new_batch_size: {:?}", data_utils::batch_size(&new_batch));
+            let new_table_name = TableName::new_mem_name(prefix);
+            let mem_table = MemTable::new_with_batch(&new_table_name, &new_batch).await?;
+            // println!("新的mem_table: {:?}", mem_table);
+            let _ = self
+                .ctx
+                .register_batch(&new_table_name.get_memtable_name(), new_batch);
+            self.table_indexs.insert(mem_table);
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+
+    /**
+     * todo:
+     *  1、从batch中获取表名 prefix
+     *  2、根据前缀，获取对应的mutable_table
+     *  3、将数据合并到mutableTable
+     *  4、判断合并之后的mutabletable的大小，如果过大就转换为immutable_table
+     */
+    #[deprecated]
     pub async fn insert(&mut self, batch: RecordBatch) {
         let schema = batch.schema();
-        let batch_size = batch_size(&batch);
         if let Some(device_id) = schema.metadata().get(TABLE_NAME) {
             self.table_names.insert(TableName::new_mem_name(device_id));
             println!("准备向: {:?} 表添加数据！", device_id);
@@ -82,9 +140,17 @@ impl MemTableService {
                         resp.push(batch);
                         println!("合并之后的 resp: {:?}", resp.len());
                         if let Ok(r) = merge_batches_with_schema(&Arc::new(schema), &resp) {
+                            let table_name = TableName::new(device_id);
+                            let mem_table =
+                                MemTable::new_with_batch(&table_name, &r).await.unwrap();
                             let _ = self.ctx.deregister_table(TableReference::from(device_id));
-
                             let _ = self.ctx.register_batch(&device_id, r);
+                            // 更新Mutables
+                            println!(
+                                "更新Mutables,新表名是：{:?},新memtable:{:?}",
+                                table_name, mem_table
+                            );
+                            self.table_indexs.insert(mem_table);
                         }
                     }
                 }
@@ -93,8 +159,8 @@ impl MemTableService {
                     let _ = self.ctx.register_batch(&device_id, batch);
                 }
             }
-            let size = self.table_size.insert(device_id, batch_size);
-            println!("{} size: {:?}", device_id, size);
+            // let size = self.table_size.insert(device_id, batch_size);
+            // println!("{} size: {:?}", device_id, size);
         } else {
             println!("没有找到表名");
         }
@@ -111,6 +177,7 @@ impl MemTableService {
     }
 
     pub async fn query(&self, sql: &str) -> Result<Vec<RecordBatch>, DataFusionError> {
+
         let resp = self.ctx.sql(sql).await;
         let resp1 = match resp {
             Ok(df) => df.collect().await,
@@ -124,39 +191,39 @@ impl MemTableService {
     /**
      * 查询指定表(所有数据，多用于测试，一般不能这么使用，类似select * from table_name)
      */
-    pub async fn query_with_table(
+    pub async fn query_with_table_prefix(
         &self,
-        table_name: &str,
+        table_prefix_name: &str,
     ) -> Result<Vec<RecordBatch>, DataFusionError> {
-        let resp = self.ctx.table(table_name).await;
-        let resp1 = match resp {
-            Ok(df) => df.collect().await,
-            Err(e) => {
-                return Err(e.into());
+        let mut resp = Vec::new();
+        let table_names = self.table_indexs.get_tables_with_prefix(table_prefix_name);
+        for table in table_names {
+            let table_name = table.get_memtable_name();
+            if let Ok(df) = self.ctx.table(table_name).await {
+                let fs = df.collect().await?;
+                resp.extend(fs);
             }
         };
-        resp1
+        Ok(resp)
+    }
+
+    pub async fn query_with_table(
+        &self,
+        table_mem_name: &str,
+    ) -> Result<Vec<RecordBatch>> {
+        if let Ok(df) = self.ctx.table(table_mem_name).await {
+            let vs = df.collect().await?;
+            Ok(vs)
+        }else {
+            Err(anyhow::Error::msg("111"))
+        }
     }
 }
 
 impl MemTableService {
     // 判断指定memtable是否可写
     fn mutable(&self, table_name: &TableName) -> Result<bool> {
-        let b = self
-            .immutables
-            .mutable(&table_name)
-            .is_ok();
-        if b {
-            if let Some(v) = self.mutables.get(table_name) {
-                let b = v.mutable;
-                Ok(b)
-            } else {
-                let msg = format!("not find table: 【{}】", table_name.get_memtable_name());
-                Err(anyhow::Error::msg(msg))
-            }
-        } else {
-            Ok(false)
-        }
+        self.table_indexs.mutable(table_name)
     }
 
     async fn flush(&self, memtable_name: impl AsRef<str>) -> Result<()> {

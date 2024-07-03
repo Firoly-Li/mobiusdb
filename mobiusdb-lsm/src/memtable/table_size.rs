@@ -1,13 +1,4 @@
-use arrow::array::RecordBatch;
 use dashmap::DashMap;
-
-pub fn batch_size(batch: &RecordBatch) -> usize {
-    let mut size = 0;
-    for column in batch.columns() {
-        size += column.get_array_memory_size();
-    }
-    size
-}
 
 #[derive(Debug, Default, Clone)]
 pub struct TableSize {

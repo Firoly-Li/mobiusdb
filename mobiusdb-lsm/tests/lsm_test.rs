@@ -2,13 +2,13 @@ pub mod common {
     pub mod data_utils;
 }
 
-use std::time::Duration;
+use std::{sync::atomic::Ordering, time::Duration};
 
 use arrow::array::RecordBatch;
 use arrow_flight::utils::{batches_to_flight_data, flight_data_to_batches};
-use common::data_utils::{create_batch_with_opts, create_data, create_diff_data, create_students};
-use datafusion::{dataframe::DataFrameWriteOptions, prelude::SessionContext};
-use mobiusdb_lsm::{memtable::table_size::batch_size, server};
+use common::data_utils::{create_batch_with_opts, create_data, create_diff_data, create_students, create_teacher_batch2_with_times};
+use datafusion::prelude::SessionContext;
+use mobiusdb_lsm::{server, utils::data_utils::{self, flight_data_to_batch}};
 use tokio::time::sleep;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -51,7 +51,7 @@ fn batch_size_test() {
 
     let batch = create_batch_with_opts(2000, "table_name");
     let schema = batch.schema();
-    println!("batch: {:?} kb", (batch_size(&batch)) / 1000);
+    println!("batch: {:?} kb", (data_utils::batch_size(&batch)) / 1000);
     let mut vs = Vec::new();
     vs.push(batch);
     let batch1 = batches_to_flight_data(&schema, vs).unwrap();
@@ -61,14 +61,45 @@ fn batch_size_test() {
     );
 }
 
+
+/**
+ * todo 这个测试不能通过！
+ */
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn batch_size_test3() {
+    let batch = create_teacher_batch2_with_times("class_1", 20);
+    let schema = batch.schema();
+    let batch1_size = data_utils::batch_size(&batch);
+    let mut vs = Vec::new();
+    vs.push(batch);
+    let fds = batches_to_flight_data(&schema, vs).unwrap();
+    let batchs = flight_data_to_batch(&fds).unwrap();
+    println!("batchs = {:?}",batchs);
+    let batchs_size = data_utils::batch_size(&batchs);
+    let b = batch1_size == batchs_size;
+    assert!(!b);
+}
+
 /**
  *
  */
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn batch_size_test1() {
-    let batch = create_batch_with_opts(2000, "table_name");
-    println!("batch: {:?} kb", (batch_size(&batch)) / 1000);
-    let ctx = SessionContext::new();
+    let batch = create_teacher_batch2_with_times("class_1", 20);
+    let schema = batch.schema();
+    let mut vs = Vec::new();
+    vs .push(batch);
+    let batch1 = batches_to_flight_data(&schema, vs).unwrap();
+    let fd = flight_data_to_batches(&batch1).unwrap();
+    let fd = fd.first().unwrap();
+    println!("fd: {:?}", fd);
+    println!("batch_len: {:?}", data_utils::batch_size(&fd));
+
+    let batch1 = create_teacher_batch2_with_times("class_1", 20);
+    println!("batch1: {:?}", batch1);
+    println!("batch1_len: {:?}", data_utils::batch_size(&batch1));
+    
+    // let ctx = SessionContext::new();
     // let df = ctx.read_batch(batch).unwrap();
     // let _ = df.write_parquet("/Users/firoly/Documents/code/rust/mobiusdb/mobiusdb-lsm/tmp/batch_size.parquet", DataFrameWriteOptions::new(), None).await;
 }
@@ -148,26 +179,29 @@ async fn lsm_query_should_be_work() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn lsm_query_sql_should_be_work() {
-    let path = "/Users/firoly/Documents/code/rust/mobiusdb/mobiusdb-lsm/tmp/";
+    let path = "/Users/firoly/Documents/code/rust/mobiusdb/mobiusdb-lsm/tmp/wal/";
     let wal_size = 1024 * 1024;
     let client = server(path, wal_size).await.unwrap();
-    for i in 0..5 {
-        let class_name = if i % 2 == 0 {
-            format!("name_{}", i)
-        } else {
-            format!("name_{}0", i)
-        };
-        println!("cname: {:?}", class_name);
-        let batch = create_group_student(i, class_name.as_str());
+    for i in 0..100 {
+        // let class_name = if i % 2 == 0 {
+        //     format!("name_{}", i)
+        // } else {
+        //     format!("name_{}0", i)
+        // };
+        let class_name = "class_1";
+        // println!("cname: {:?}", class_name);
+        let batch = create_teacher_batch2_with_times(class_name,i * 10);
+        let size = data_utils::batch_size(&batch);
+        // println!("客户端发送的数据 batch size: {:?}", size);
         let schema = batch.schema();
-        println!("schema: {:?}", schema);
+        // println!("schema: {:?}", schema);
         let fds = batches_to_flight_data(&schema, vec![batch]).unwrap();
         let resp = client.append_fds(fds).await;
-        println!("resp: {:?}", resp);
+        // println!("resp: {:?}", resp);
     }
 
-    let sql = format!("select * from name_10 where age > 12");
-    let resp = client.query(sql.as_str()).await;
+    // let sql = format!("select * from class_1 where age > 12");
+    let resp = client.table("class_1").await;
     println!("tables: {:?}", resp);
 }
 

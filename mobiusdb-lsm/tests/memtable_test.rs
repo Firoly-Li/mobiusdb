@@ -1,5 +1,5 @@
 use arrow::array::RecordBatch;
-use common::data_utils::{create_students, create_teacher};
+use common::data_utils::{create_students, create_teacher_batch2_with_times};
 use mobiusdb_lsm::memtable::{array_data_utils::merge_batches_with_schema, MemTableService};
 
 pub mod common {
@@ -38,30 +38,13 @@ fn create_group2_student() -> RecordBatch {
     resp
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_memtable() {
-    let mut memtable = MemTableService::new();
-    let group1 = create_group1_student();
-    let group2 = create_group2_student();
-    let teachers = create_teacher("三年级二班");
-    let teachers2 = create_teacher("三年级一班");
-
-    memtable.insert(group1).await;
-    memtable.insert(group2).await;
-    memtable.insert(teachers).await;
-    memtable.insert(teachers2).await;
-    let resp = memtable.query("select * from 三年级二班").await;
-    println!("resp: {:?}", resp);
-    let resp1 = memtable.query("select name from 三年级一班").await;
-    println!("resp1: {:?}", resp1);
-}
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn query_test() {
     let mut mem_table = MemTableService::new();
-    let group1 = create_group1_student();
-    mem_table.insert(group1).await;
-    let resp = mem_table.query("select name from 三年级二班").await;
+    let group1 = create_teacher_batch2_with_times("class",30);
+    let r = mem_table.insert_batch(&group1).await;
+    let resp = mem_table.query_with_table_prefix("class").await;
     println!("resp: {:?}", resp);
 }
 

@@ -2,9 +2,9 @@ use crate::utils::{file_utils::SSTABLE_FILE_SUFFIX, time_utils::now};
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct TableName {
-    prefix: String,
-    time: Option<u64>,
-    suffix: Option<String>,
+    pub(crate) prefix: String,
+    pub(crate) time: Option<u64>,
+    pub(crate) suffix: Option<String>,
 }
 
 impl TableName {

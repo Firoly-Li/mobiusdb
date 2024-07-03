@@ -92,6 +92,51 @@ mobius-lsm模块是mobiusdb的持久层，通过LSM树实现了数据的高效�
 
 ![LSM tree](/Users/firoly/Documents/code/rust/mobiusdb/reademe_imgs/LSMtree.jpg)
 
+#### *LsmCommand*
+
+LSM本身内部是高度聚合的，对外只提供了一系列接口，细节功能并不对外暴露。这一系列接口是：
+
+**1、Append**
+
+向LSM系统中添加数据
+
+((*Vec*<*FlightData*>, *oneshot*::*Sender*<*bool*>)),
+
+**2、OffsetList**
+
+返回指定数据表的索引
+
+((*String*, *oneshot*::*Sender*<*Vec*<*Offset*>>)),
+
+**3、Table**
+
+查询指定表的数据，
+
+((*String*, *oneshot*::*Sender*<*Option*<*RecordBatch*>>)),
+
+ **4、Query**
+
+通用查询接口，支持SQL
+
+((*String*, *oneshot*::*Sender*<*Option*<*RecordBatch*>>)),
+
+**5、TableList**
+
+查询LSM系统维护的所有的表
+
+(*oneshot*::*Sender*<*Option*<*Vec*<*TableName*>>>),
+
+
+
+#### Data_Utils
+
+##### TODO
+
+- [x] batch_sort: 对batch以指定column进行排序
+
+
+
+
 #### WALLog
 
 - [x] WalMsg结构设计
@@ -107,9 +152,31 @@ mobius-lsm模块是mobiusdb的持久层，通过LSM树实现了数据的高效�
 
 ![memtable_service](/Users/firoly/Documents/code/rust/mobiusdb/reademe_imgs/memtable_service.png)
 
-- [ ] MemTable的结构设计
+1、mutables中存储的memtable不一定都是mutable，也有可能是immutable。在新数据写入后，immutable会转移到immtables中。
+
+##### TODO
+
+- [x] MemTable的结构设计
+
+- [x] 打通wal和memtable_service
+
+  - [x] 数据通过写入wal，也能写入memtable_service
+
+    - [ ] >[注意:]
+          >
+          > 一个RecordBatch经过**batches_to_flight_data**和**flight_data_to_batches**转换回一个新的RecordBatch之后，尽管内容没有变化，但是在内存中大小发生了变化；
+
+  - [x] 修改
+
+  - [x] Memtable_service能够观察到数据变化，mutables --> immtables的变化
+
+    - [ ] 
+
+  - [ ] 监控immtables中相同prefix的memtable的变化
 
 #### SSTable
+
+##### TODO
 
 - [ ] MemTable落盘Parquet文件
 - [ ] Parquet文件的合并
