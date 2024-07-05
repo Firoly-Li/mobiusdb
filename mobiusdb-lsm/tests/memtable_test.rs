@@ -38,11 +38,10 @@ fn create_group2_student() -> RecordBatch {
     resp
 }
 
-
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn query_test() {
     let mut mem_table = MemTableService::new();
-    let group1 = create_teacher_batch2_with_times("class",30);
+    let group1 = create_teacher_batch2_with_times("class", 30);
     let r = mem_table.insert_batch(&group1).await;
     let resp = mem_table.query_with_table_prefix("class").await;
     println!("resp: {:?}", resp);

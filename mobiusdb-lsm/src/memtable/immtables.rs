@@ -27,7 +27,7 @@ impl Immutables {
                 let mut vs = Vec::new();
                 vs.push(mem_table_name.clone());
                 self.tables_name.insert(prefix.clone(), vs);
-            },   
+            }
         }
         match self.tables.get_mut(prefix.as_str()) {
             Some(mut vs) => vs.push(memtable),
@@ -35,7 +35,7 @@ impl Immutables {
                 let mut vs = Vec::new();
                 vs.push(memtable);
                 self.tables.insert(prefix, vs);
-            },   
+            }
         }
         true
     }
@@ -65,7 +65,7 @@ impl Immutables {
 }
 
 impl Immutables {
-    pub fn get_tables(&self,prefix: &str) -> Vec<TableName> {
+    pub fn get_tables(&self, prefix: &str) -> Vec<TableName> {
         let tables = self.tables_name.get(prefix);
         match tables {
             Some(ts) => ts.clone(),

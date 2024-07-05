@@ -245,17 +245,20 @@ pub fn create_teacher_batch2() -> RecordBatch {
     batch
 }
 
-pub fn create_teacher_batch2_with_times(table_name: impl AsRef<str>,age: i32) -> RecordBatch {
-    let schema = Arc::new(Schema::new(vec![
-        Field::new("name", DataType::Utf8, true),
-        Field::new("age", DataType::Int32, true),
-        Field::new("teach", DataType::Utf8, true),
-        Field::new("timestamp", DataType::UInt64, true),
-    ]).with_metadata({
-        let mut map = HashMap::new();
-        map.insert(TABLE_NAME.to_string(), table_name.as_ref().to_string());
-        map
-    }));
+pub fn create_teacher_batch2_with_times(table_name: impl AsRef<str>, age: i32) -> RecordBatch {
+    let schema = Arc::new(
+        Schema::new(vec![
+            Field::new("name", DataType::Utf8, true),
+            Field::new("age", DataType::Int32, true),
+            Field::new("teach", DataType::Utf8, true),
+            Field::new("timestamp", DataType::UInt64, true),
+        ])
+        .with_metadata({
+            let mut map = HashMap::new();
+            map.insert(TABLE_NAME.to_string(), table_name.as_ref().to_string());
+            map
+        }),
+    );
 
     let batch = RecordBatch::try_new(
         schema.clone(),

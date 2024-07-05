@@ -1,6 +1,7 @@
-
-
-use crate::utils::{data_utils::{self, get_timestamp_from_batch}, table_name::TableName};
+use crate::utils::{
+    data_utils::{self, get_timestamp_from_batch},
+    table_name::TableName,
+};
 use anyhow::Result;
 use arrow::array::RecordBatch;
 
@@ -23,9 +24,9 @@ impl MemTable {
     pub async fn new_with_batch(name: &TableName, batch: &RecordBatch) -> Result<Self> {
         let (start, end) = get_timestamp_from_batch(batch).await?;
         let batch_size = data_utils::batch_size(batch);
-        println!("batch_size:{}",batch_size);
-        let mutable =  ! (batch_size > MAX_BATCH_SIZE);
-        println!("mutable:{}",mutable);
+        println!("batch_size:{}", batch_size);
+        let mutable = !(batch_size > MAX_BATCH_SIZE);
+        println!("mutable:{}", mutable);
         Ok(Self {
             name: name.clone(),
             mutable,

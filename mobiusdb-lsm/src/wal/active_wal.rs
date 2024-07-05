@@ -18,7 +18,8 @@ use crate::{
 
 use super::{
     offset::Offset,
-    serialization::Decoder,
+    serialization::{Decoder, Encoder},
+    wal_message::{IntoWalMessage, WalMessage},
     wal_msg::{walmsgs_to_offsets, IntoWalMsg},
     Append,
 };
@@ -170,6 +171,8 @@ impl ActiveWal {
             return Err(anyhow::Error::msg("wal file is not writeable"));
         }
         let wal_msg = WalMsg::from(fds);
+        // let wal_message = fds.into_wal_message();
+        // self.append_wal_message(wal_message).await
         self.append_wal_msg(wal_msg).await
     }
 
@@ -180,6 +183,29 @@ impl ActiveWal {
         let mut wal_buf = BytesMut::new();
         wal_msg.encode(&mut wal_buf);
         self.append_bytes(wal_buf.freeze()).await
+    }
+
+    async fn append_wal_message(&mut self, wal_msg: WalMessage) -> Result<Offset> {
+        let v_len = wal_msg.get_bytes_len();
+        let mut buff = BytesMut::new();
+        wal_msg.encode(&mut buff).unwrap();
+        if !self.write_enable {
+            return Err(anyhow::Error::msg("wal file is not writeable"));
+        }
+        let mut file = self.wal.lock().await;
+        // 当前文件的下标
+        if self.size > self.max_size {
+            self.write_enable = false;
+            return Err(anyhow::Error::msg("Wal file is full"));
+        }
+        let mut index = Offset::from((self.size + 4) as usize);
+        file.write_all(&buff.freeze())
+            .await
+            .expect("Failed to write");
+        index.update((v_len) as usize);
+        let add_size = (v_len + 4) as usize;
+        self.size += add_size;
+        Ok(index)
     }
 
     async fn append_bytes(&mut self, bytes: Bytes) -> Result<Offset> {
@@ -270,11 +296,13 @@ mod tests {
         utils::{batches_to_flight_data, flight_data_to_batches},
         FlightData,
     };
-    use bytes::Bytes;
+    use bytes::{Buf, Bytes};
     use prost::Message;
     use std::sync::Arc;
 
-    use crate::wal::{active_wal::ActiveWal, offset::Offset, wal_msg::WalMsg};
+    use crate::wal::{
+        active_wal::ActiveWal, offset::Offset, wal_message::WalMessage, wal_msg::WalMsg,
+    };
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn active_wal_open_test() -> Result<()> {
@@ -421,6 +449,23 @@ mod tests {
             // println!("offset: {}", offset);
             let mut s = buf_mut.split_to(offset as usize);
             let fd = FlightData::decode(&mut s).unwrap();
+            resp.push(fd);
+        }
+        let resp = flight_data_to_batches(&resp).unwrap();
+        // println!("resp: {:?}", resp);
+        Ok(resp)
+    }
+
+    fn wal_message_to_batch(wal_msg: WalMessage) -> Result<Vec<RecordBatch>> {
+        let mut bytes = wal_msg.get_bytes().clone();
+        let mut resp = Vec::new();
+        loop {
+            if bytes.is_empty() {
+                break;
+            }
+            let s = bytes.get_u32();
+            let mut b = bytes.split_to(s as usize);
+            let fd = FlightData::decode(&mut b).unwrap();
             resp.push(fd);
         }
         let resp = flight_data_to_batches(&resp).unwrap();

@@ -3,6 +3,10 @@ use bytes::{Buf, BufMut, Bytes, BytesMut};
 
 use super::{offset::Offset, serialization::Decoder};
 
+/**
+ * todo:
+ *  1、WalMsg结构需要优化一下，现在的结构和Vec<FlightData>耦合性太高了
+ */
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct WalMsg {
     num: u16,

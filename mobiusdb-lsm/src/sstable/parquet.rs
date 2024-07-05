@@ -11,17 +11,17 @@ use super::SsTable;
 #[derive(Debug, Clone)]
 pub struct ParquetSsTable {
     // sstable文件名称
-    name: TableName,
+    pub(crate) name: TableName,
     // 字段名称
-    fields: Vec<String>,
+    pub(crate) fields: Vec<String>,
     // 文件层级
-    level: Level,
+    pub(crate) level: Level,
     // 文件大小
-    size: usize,
+    pub(crate) size: usize,
     // 开始时间
-    start: u64,
+    pub(crate) start: u64,
     // 结束时间
-    end: u64,
+    pub(crate) end: u64,
 }
 
 impl ParquetSsTable {
@@ -35,6 +35,13 @@ impl ParquetSsTable {
             start: 0,
             end: 0,
         }
+    }
+    pub fn get_sstable_name(&self) -> String {
+        self.name.get_sstable_name()
+    }
+
+    pub fn get_table_name(&self) -> TableName {
+        self.name.clone()
     }
     pub fn new_with_opts(
         name: impl AsRef<str>,

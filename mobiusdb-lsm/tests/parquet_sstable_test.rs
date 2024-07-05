@@ -13,11 +13,13 @@ pub mod common {
 #[tokio::test]
 async fn parquet_sstable_save_test() -> Result<()> {
     let batch = create_teacher("class_1");
-    let parquet = ParquetSsTable::new_with_table("class_1");
-    let s = parquet.write(&batch).await?;
+    let parquet_table = ParquetSsTable::new_with_table("class_1");
+    let sstable_name = parquet_table.get_sstable_name();
+    println!("sstable_name: {}", sstable_name);
+    let s = parquet_table.write(&batch).await?;
     assert!(s);
     let ctx = SessionContext::new();
-    let path = get_sstable_path("class_1", Level::L0);
+    let path = get_sstable_path(sstable_name.as_str(), Level::L0);
     let mut opts = ParquetReadOptions::default();
     opts.file_extension = ".sst";
     let df = ctx.read_parquet(path, opts).await?;

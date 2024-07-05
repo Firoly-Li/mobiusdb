@@ -6,9 +6,15 @@ use std::{sync::atomic::Ordering, time::Duration};
 
 use arrow::array::RecordBatch;
 use arrow_flight::utils::{batches_to_flight_data, flight_data_to_batches};
-use common::data_utils::{create_batch_with_opts, create_data, create_diff_data, create_students, create_teacher_batch2_with_times};
+use common::data_utils::{
+    create_batch_with_opts, create_data, create_diff_data, create_students,
+    create_teacher_batch2_with_times,
+};
 use datafusion::prelude::SessionContext;
-use mobiusdb_lsm::{server, utils::data_utils::{self, flight_data_to_batch}};
+use mobiusdb_lsm::{
+    server,
+    utils::data_utils::{self, flight_data_to_batch},
+};
 use tokio::time::sleep;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -61,7 +67,6 @@ fn batch_size_test() {
     );
 }
 
-
 /**
  * todo 这个测试不能通过！
  */
@@ -74,7 +79,7 @@ async fn batch_size_test3() {
     vs.push(batch);
     let fds = batches_to_flight_data(&schema, vs).unwrap();
     let batchs = flight_data_to_batch(&fds).unwrap();
-    println!("batchs = {:?}",batchs);
+    println!("batchs = {:?}", batchs);
     let batchs_size = data_utils::batch_size(&batchs);
     let b = batch1_size == batchs_size;
     assert!(!b);
@@ -88,7 +93,7 @@ async fn batch_size_test1() {
     let batch = create_teacher_batch2_with_times("class_1", 20);
     let schema = batch.schema();
     let mut vs = Vec::new();
-    vs .push(batch);
+    vs.push(batch);
     let batch1 = batches_to_flight_data(&schema, vs).unwrap();
     let fd = flight_data_to_batches(&batch1).unwrap();
     let fd = fd.first().unwrap();
@@ -98,7 +103,7 @@ async fn batch_size_test1() {
     let batch1 = create_teacher_batch2_with_times("class_1", 20);
     println!("batch1: {:?}", batch1);
     println!("batch1_len: {:?}", data_utils::batch_size(&batch1));
-    
+
     // let ctx = SessionContext::new();
     // let df = ctx.read_batch(batch).unwrap();
     // let _ = df.write_parquet("/Users/firoly/Documents/code/rust/mobiusdb/mobiusdb-lsm/tmp/batch_size.parquet", DataFrameWriteOptions::new(), None).await;
@@ -190,7 +195,7 @@ async fn lsm_query_sql_should_be_work() {
         // };
         let class_name = "class_1";
         // println!("cname: {:?}", class_name);
-        let batch = create_teacher_batch2_with_times(class_name,i * 10);
+        let batch = create_teacher_batch2_with_times(class_name, i * 10);
         let size = data_utils::batch_size(&batch);
         // println!("客户端发送的数据 batch size: {:?}", size);
         let schema = batch.schema();

@@ -45,21 +45,13 @@ pub fn get_sstable_file_name(table_path: &str) -> Option<String> {
  * 根据文件名称获取sstable文件的路径
  */
 pub fn get_sstable_path(table_name: &str, level: Level) -> String {
-    match SSTABLE_PATH.ends_with("/") {
-        true => format!(
-            "{}{}/{}{}",
-            SSTABLE_PATH,
-            String::from(level),
-            table_name,
-            SSTABLE_FILE_SUFFIX
-        ),
-        false => format!(
-            "{}/{}/{}{}",
-            SSTABLE_PATH,
-            String::from(level),
-            table_name,
-            SSTABLE_FILE_SUFFIX
-        ),
+    let new_path = match SSTABLE_PATH.ends_with("/") {
+        true => format!("{}{}/", SSTABLE_PATH, String::from(level)),
+        false => format!("{}/{}/", SSTABLE_PATH, String::from(level)),
+    };
+    match table_name.ends_with(SSTABLE_FILE_SUFFIX) {
+        true => format!("{}/{}", new_path, table_name),
+        false => format!("{}/{}{}", new_path, table_name, SSTABLE_FILE_SUFFIX),
     }
 }
 
@@ -69,22 +61,7 @@ pub fn get_sstable_path(table_name: &str, level: Level) -> String {
 pub fn create_sstable_path(table_prefix: &str, level: Level) -> String {
     let time = now().to_string();
     let new_table_name = format!("{}-{}", table_prefix, time);
-    match SSTABLE_PATH.ends_with("/") {
-        true => format!(
-            "{}{}/{}{}",
-            SSTABLE_PATH,
-            String::from(level),
-            new_table_name,
-            SSTABLE_FILE_SUFFIX
-        ),
-        false => format!(
-            "{}/{}/{}{}",
-            SSTABLE_PATH,
-            String::from(level),
-            new_table_name,
-            SSTABLE_FILE_SUFFIX
-        ),
-    }
+    get_sstable_path(new_table_name.as_str(), level)
 }
 
 /**

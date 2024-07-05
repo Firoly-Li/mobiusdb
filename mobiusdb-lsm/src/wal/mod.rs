@@ -2,6 +2,7 @@ pub mod active_wal;
 pub mod index_file;
 pub(crate) mod offset;
 pub mod serialization;
+pub mod wal_message;
 pub mod wal_msg;
 
 use std::collections::HashMap;
@@ -39,6 +40,7 @@ pub struct WalService {
 }
 impl WalService {
     // 初始化walService
+    // todo 需要重构，拆分代码
     pub async fn init(path: impl Into<String>, wal_size: usize) -> Result<Self> {
         let path: String = path.into();
         match has_file_in_path(&path).await {
@@ -91,6 +93,49 @@ impl WalService {
         self.indexs_map.insert(old_wal_name, old_indexs);
         self.wal = new_wal;
         Ok(true)
+    }
+}
+
+impl WalService {
+    // 初始化walService(第一次启动)
+    pub async fn first_start(path: impl AsRef<str>, wal_size: usize) -> Result<Self> {
+        println!("wal文件不存在,新建wal文件");
+        // 不存在wal文件,是第一次启动
+        let wal = ActiveWal::with_size(path.as_ref(), wal_size).await?;
+        Ok(Self {
+            path: path.as_ref().to_string(),
+            wal,
+            wal_max_size: wal_size,
+            indexs: Vec::new(),
+            indexs_map: HashMap::new(),
+        })
+    }
+
+    // 初始化walService(存在wal文件)
+    pub async fn init_with_file(path: impl AsRef<str>, wal_size: usize) -> Result<Self> {
+        println!("wal文件存在,读取wal文件");
+        // 存在wal文件
+        if let Ok(mut files_name) = get_files_name(path.as_ref()).await {
+            files_name.sort();
+            let file_name = files_name.last().unwrap();
+            let file_path = path.as_ref().to_string() + "/" + file_name;
+            let _a: Vec<&str> = file_name.split(".").collect();
+            // print!("file_path = {}",file_path);
+            // 1、加载wal文件
+            let (wal, offsets) = ActiveWal::load(file_path.as_str()).await.unwrap();
+            // println!("offsets = {:?}",offsets);
+
+            // 3、创建
+            Ok(Self {
+                path: path.as_ref().to_string(),
+                wal,
+                wal_max_size: wal_size,
+                indexs: offsets,
+                indexs_map: HashMap::new(),
+            })
+        } else {
+            Err(anyhow::Error::msg("wal文件获取失败"))
+        }
     }
 }
 
