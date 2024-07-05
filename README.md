@@ -88,11 +88,13 @@ mobius-flight模块是mobiusdb的网络层，主要用于处理网络服务，�
 
 ### Mobiusdb-lsm模块
 
-mobius-lsm模块是mobiusdb的持久层，通过LSM树实现了数据的高效落盘。
+mobius-lsm模块是mobiusdb的持久层，通过LSM树实现了数据的高效落盘。架构图如下：
 
 ![LSM tree](./reademe_imgs/LSMtree.jpg)
 
-#### *LsmCommand*
+
+
+#### *一、LsmCommand*
 
 LSM本身内部是高度聚合的，对外只提供了一系列接口，细节功能并不对外暴露。这一系列接口是：
 
@@ -128,7 +130,7 @@ LSM本身内部是高度聚合的，对外只提供了一系列接口，细节�
 
 
 
-#### Data_Utils
+#### 二、Data_Utils
 
 ##### TODO
 
@@ -136,8 +138,7 @@ LSM本身内部是高度聚合的，对外只提供了一系列接口，细节�
 
 
 
-
-#### WALLog
+#### 三、WALLog模块
 
 - [x] WalMsg结构设计
 - [x] WalLog文件的读写
@@ -148,15 +149,22 @@ LSM本身内部是高度聚合的，对外只提供了一系列接口，细节�
     - [x] 新增WalLog的load( )
     - [x] Vec<WalMsg>的Decode方法
 
-#### MemTable
+#### 四、MemTable
 
-![memtable_service](./reademe_imgs/memtable_service.png)
+![memtable_service](./reademe_imgs/table_indexs.png)
 
 1、mutables中存储的memtable不一定都是mutable，也有可能是immutable。在新数据写入后，immutable会转移到immtables中。
+
+##### MemTableService流程图
+
+![](./reademe_imgs/MemTableService.png)
 
 ##### TODO
 
 - [x] MemTable的结构设计
+
+  - [ ] Table_indexs结构设计
+  - [ ] 
 
 - [x] 打通wal和memtable_service
 
@@ -166,20 +174,17 @@ LSM本身内部是高度聚合的，对外只提供了一系列接口，细节�
           >
           > 一个RecordBatch经过**batches_to_flight_data**和**flight_data_to_batches**转换回一个新的RecordBatch之后，尽管内容没有变化，但是在内存中大小发生了变化；
 
-  - [x] 修改
-
   - [x] Memtable_service能够观察到数据变化，mutables --> immtables的变化
-
-    - [ ] 
 
   - [ ] 监控immtables中相同prefix的memtable的变化
 
-#### SSTable
+#### 五、SSTable
 
 ##### TODO
 
 - [ ] MemTable落盘Parquet文件
 - [ ] Parquet文件的合并
+- [ ] 大文件合并(L3、L4级别的文件合并)
 - [ ] SSTable数据查询
 
 
