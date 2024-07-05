@@ -10,7 +10,7 @@ use arrow_flight::{
     FlightDescriptor, FlightEndpoint, FlightInfo, HandshakeRequest, HandshakeResponse, PollInfo,
     PutResult, SchemaResult, Ticket,
 };
-use do_put::write_batch;
+use do_put::{write_batch, write_fds};
 use futures::{stream::BoxStream, Stream, StreamExt, TryStreamExt};
 use list_flights::FlightsKey;
 use prost::{bytes::Bytes, Message};
@@ -210,13 +210,7 @@ where
             .into_iter()
             .filter_map(|fd| fd.ok())
             .collect::<Vec<FlightData>>();
-        println!("ss: {:?}", ss);
-
-        let ss1 = ss.clone();
-        let batches = flight_data_to_batches(&ss1).unwrap();
-        println!("batches: {:?}", batches);
-        // 这里需要把RecordBatch存储起来，以便于后续使用
-        let write_result = write_batch(batches).await;
+        let write_result = write_fds(ss).await;
         let stream = futures::stream::iter(write_result).map_err(Into::into);
         Ok(Response::new(stream.boxed()))
     }

@@ -1,7 +1,7 @@
 use std::{
     fmt::{self, Debug},
     fs::File,
-    io::Read,
+    io::{Cursor, Read},
 };
 
 use arrow::{
@@ -174,9 +174,39 @@ fn ipc_generator() {
         .unwrap();
     println!("r = {:?}", r.len());
     println!(
-        "s_ipc_msg = {:?},s_arrow_data = {:?}",
+        "s_ipc_msg = {:?},
+        s_arrow_data = {:?}",
         s.ipc_message, s.arrow_data
     );
+}
+
+#[test]
+fn encode_batch_test() {
+    let students = create_short_batch();
+    println!("students = {:?}", students);
+    let schema = students.schema();
+
+    // 序列化
+    let mut vs = Vec::new();
+    {
+    let mut s = StreamWriter::try_new(&mut vs, &schema).unwrap();
+    s.write(&students).unwrap();
+    let _ = s.finish();
+    }
+    println!("vs {:?}", vs);
+    // 反序列化RecordBatch
+    let cursor: Cursor<_> = Cursor::new(vs);
+    let mut reader = StreamReader::try_new(cursor,None).unwrap();
+    
+    while let Some(batch) = reader.next(){
+        match batch {
+            Ok(b) => println!("ok {:?}", b),
+            Err(e) => {
+                println!("read error!");
+                break;
+            },
+        }
+    }
 }
 
 /**
